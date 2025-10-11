@@ -1,19 +1,39 @@
-// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
-// © AlgoAlpha
-
-//@version=5
-indicator("Machine Learning Adaptive SuperTrend [AlgoAlpha]", "AlgoAlpha - 🤖 Adaptive SuperTrend", overlay = true, max_labels_count = 500)
+//@version=6
+indicator('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
 import TradingView/ta/7
-atr_len = input.int(10, "ATR Length", group = "SuperTrend Settings")
-fact = input.float(3, "SuperTrend Factor", group = "SuperTrend Settings")
-training_data_period = input.int(100, "Training Data Length", group = "K-Means Settings")
-highvol = input.float(0.75, "Initial High volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'high volatility' area is, a value of 0.75 will take the 75th percentile of the range of ATR values over the training data period")
-midvol = input.float(0.5, "Initial Medium volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'medium volatility' area is, a value of 0.5 will take the 50th percentile of the range of ATR values over the training data period")
-lowvol = input.float(0.25, "Initial Low volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'low volatility' area is, a value of 0.25 will take the 25th percentile of the range of ATR values over the training data period")
-t1 = input.int(70, "Transparency 1", maxval = 100, minval = 0, group = "Appearance")
-t2 = input.int(95, "Transparency 2", maxval = 100, minval = 0, group = "Appearance")
-green = input.color(#00ffbb, "Bullish Color", group = "Appearance")
-red = input.color(#ff1100, "Bearish Color", group = "Appearance")
+atr_len = input.int(10, 'ATR Length', group = 'SuperTrend Settings')
+fact = input.float(3, 'SuperTrend Factor', group = 'SuperTrend Settings')
+training_data_period = input.int(100, 'Training Data Length', group = 'K-Means Settings')
+highvol = input.float(0.75, 'Initial High volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'high volatility\' area is, a value of 0.75 will take the 75th percentile of the range of ATR values over the training data period')
+midvol = input.float(0.5, 'Initial Medium volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'medium volatility\' area is, a value of 0.5 will take the 50th percentile of the range of ATR values over the training data period')
+lowvol = input.float(0.25, 'Initial Low volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'low volatility\' area is, a value of 0.25 will take the 25th percentile of the range of ATR values over the training data period')
+t1 = input.int(70, 'Transparency 1', maxval = 100, minval = 0, group = 'Appearance')
+t2 = input.int(95, 'Transparency 2', maxval = 100, minval = 0, group = 'Appearance')
+green = input.color(#00ffbb, 'Bullish Color', group = 'Appearance')
+red = input.color(#ff1100, 'Bearish Color', group = 'Appearance')
+strong_green = input.color(#00ff00, 'Strong Bullish Color', group = 'Appearance')
+strong_red = input.color(#ff0000, 'Strong Bearish Color', group = 'Appearance')
+
+// Signal Strength Settings
+volume_threshold = input.float(1.5, 'Volume Threshold Multiplier', minval = 1.0, group = 'Signal Strength')
+rsi_period = input.int(14, 'RSI Period', group = 'Signal Strength')
+momentum_period = input.int(14, 'Momentum Period', group = 'Signal Strength')
+
+// Webhook Settings
+webhook_url = input.string('https://signals.signum.money/trading', 'Webhook URL', group = 'Webhook Settings')
+bot_id = input.string('4vH63Kjr', 'Bot ID', group = 'Webhook Settings')
+order_size = input.string('100%', 'Order Size', group = 'Webhook Settings')
+enable_webhooks = input.bool(true, 'Enable Webhook Alerts', group = 'Webhook Settings')
+
+// Debug Settings
+show_debug_table = input.bool(true, 'Show Debug Table', group = 'Debug Settings')
+show_debug_labels = input.bool(false, 'Show Debug Labels', group = 'Debug Settings')
+debug_rsi = input.bool(true, 'Debug RSI', group = 'Debug Settings')
+debug_volume = input.bool(true, 'Debug Volume', group = 'Debug Settings')
+debug_macd = input.bool(true, 'Debug MACD', group = 'Debug Settings')
+debug_momentum = input.bool(true, 'Debug Momentum', group = 'Debug Settings')
+debug_alerts = input.bool(true, 'Debug Alerts', group = 'Debug Settings')
+test_alert = input.bool(false, 'Test Alert (Every 10 bars)', group = 'Debug Settings')
 
 pine_supertrend(factor, atr) =>
     src = hl2
@@ -29,10 +49,13 @@ pine_supertrend(factor, atr) =>
     prevSuperTrend = superTrend[1]
     if na(atr[1])
         _direction := 1
+        _direction
     else if prevSuperTrend == prevUpperBand
         _direction := close > upperBand ? -1 : 1
+        _direction
     else
         _direction := close < lowerBand ? 1 : -1
+        _direction
     superTrend := _direction == -1 ? lowerBand : upperBand
     [superTrend, _direction]
 
@@ -41,9 +64,9 @@ volatility = ta.atr(atr_len)
 upper = ta.highest(volatility, training_data_period)
 lower = ta.lowest(volatility, training_data_period)
 
-high_volatility = lower + (upper-lower) * highvol
-medium_volatility = lower + (upper-lower) * midvol
-low_volatility = lower + (upper-lower) * lowvol
+high_volatility = lower + (upper - lower) * highvol
+medium_volatility = lower + (upper - lower) * midvol
+low_volatility = lower + (upper - lower) * lowvol
 
 iterations = 0
 
@@ -54,17 +77,17 @@ size_c = 0
 hv = array.new_float()
 mv = array.new_float()
 lv = array.new_float()
-amean = array.new_float(1,high_volatility)
-bmean = array.new_float(1,medium_volatility)
-cmean = array.new_float(1,low_volatility)
+amean = array.new_float(1, high_volatility)
+bmean = array.new_float(1, medium_volatility)
+cmean = array.new_float(1, low_volatility)
 
-if nz(volatility) > 0 and bar_index >= training_data_period-1
+if nz(volatility) > 0 and bar_index >= training_data_period - 1
 
-    while ((amean.size() == 1 ? true : (amean.first() != amean.get(1))) or (bmean.size() == 1 ? true : (bmean.first() != bmean.get(1))) or (cmean.size() == 1 ? true : (cmean.first() != cmean.get(1))))
+    while (amean.size() == 1 ? true : amean.first() != amean.get(1)) or (bmean.size() == 1 ? true : bmean.first() != bmean.get(1)) or (cmean.size() == 1 ? true : cmean.first() != cmean.get(1))
         hv.clear()
         mv.clear()
         lv.clear()
-        for i = training_data_period-1 to 0
+        for i = training_data_period - 1 to 0 by 1
             _1 = math.abs(volatility[i] - amean.first())
             _2 = math.abs(volatility[i] - bmean.first())
             _3 = math.abs(volatility[i] - cmean.first())
@@ -76,7 +99,7 @@ if nz(volatility) > 0 and bar_index >= training_data_period-1
 
             if _3 < _1 and _3 < _2
                 lv.unshift(volatility[i])
-        
+
         amean.unshift(hv.avg())
         bmean.unshift(mv.avg())
         cmean.unshift(lv.avg())
@@ -84,6 +107,7 @@ if nz(volatility) > 0 and bar_index >= training_data_period-1
         size_b := mv.size()
         size_c := lv.size()
         iterations := iterations + 1
+        iterations
 
 hv_new = amean.first()
 mv_new = bmean.first()
@@ -107,40 +131,168 @@ cluster = distances.indexof(distances.min()) // 0 for high, 1 for medium, 2 for 
 assigned_centroid = cluster == -1 ? na : centroids.get(cluster)
 
 [ST, dir] = pine_supertrend(fact, assigned_centroid)
+
+// Enhanced Signal Strength Detection
+volume_avg = ta.sma(volume, 20)
+high_volume = volume > volume_avg * volume_threshold
+
+// Technical indicators for signal strength
+rsi = ta.rsi(close, rsi_period)
+macd_line = ta.ema(close, 12) - ta.ema(close, 26)
+macd_signal = ta.ema(macd_line, 9)
+macd_histogram = macd_line - macd_signal
+
+// Trend confirmation
+ema_20 = ta.ema(close, 20)
+ema_50 = ta.ema(close, 50)
+trend_bullish = ema_20 > ema_50
+trend_bearish = ema_20 < ema_50
+
+// Price momentum
+price_momentum = close - close[momentum_period]
+strong_bullish_momentum = price_momentum > 0 and close > open
+strong_bearish_momentum = price_momentum < 0 and close < open
+
+// ATR for label positioning
+atr_7 = ta.atr(7)
+
+// Signal strength conditions
+// Strong Buy conditions
+strong_buy_condition = ta.crossunder(dir, 0) and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
+
+// Regular Buy conditions
+buy_condition = ta.crossunder(dir, 0) and not strong_buy_condition
+
+// Strong Sell conditions
+strong_sell_condition = ta.crossover(dir, 0) and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
+
+// Regular Sell conditions
+sell_condition = ta.crossover(dir, 0) and not strong_sell_condition
+
 upTrend = plot(close > ST ? ST : na, color = color.new(green, t1), style = plot.style_linebr) //, force_overlay = true
 downTrend = plot(close < ST ? ST : na, color = color.new(red, t1), style = plot.style_linebr, force_overlay = false) //, force_overlay = true
-bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, "Body Middle",display = display.none)
+bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, 'Body Middle', display = display.none)
 
 fill(bodyMiddle, upTrend, (open + close) / 2, ST, color.new(green, t2), color.new(green, t1))
 fill(bodyMiddle, downTrend, ST, (open + close) / 2, color.new(red, t1), color.new(red, t2))
 
-plotshape(ta.crossunder(dir, 0) ? ST : na, "Bullish Trend", shape.labelup, location.absolute, green, text = "▲", textcolor = chart.fg_color, size = size.small)
-plotshape(ta.crossover(dir, 0) ? ST : na, "Bearish Trend", shape.labeldown, location.absolute, red, text = "▼", textcolor = chart.fg_color, size = size.small)
+// Enhanced signal shapes with different colors for strength
+plotshape(strong_buy_condition and barstate.isconfirmed ? ST : na, 'Strong Buy', shape.labelup, location.absolute, strong_green, text = '🟢 STRONG BUY', textcolor = color.white, size = size.normal)
+plotshape(buy_condition and barstate.isconfirmed ? ST : na, 'Buy', shape.labelup, location.absolute, green, text = '🟢 BUY', textcolor = color.white, size = size.small)
+plotshape(strong_sell_condition and barstate.isconfirmed ? ST : na, 'Strong Sell', shape.labeldown, location.absolute, strong_red, text = '🔴 STRONG SELL', textcolor = color.white, size = size.normal)
+plotshape(sell_condition and barstate.isconfirmed ? ST : na, 'Sell', shape.labeldown, location.absolute, red, text = '🔴 SELL', textcolor = color.white, size = size.small)
 
-label.new(bar_index, dir > 0 ? ST + ta.atr(7) : ST - ta.atr(7), text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
+label.new(bar_index, dir > 0 ? ST + atr_7 : ST - atr_7, text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
+
+// Debug Labels
+if show_debug_labels and barstate.isconfirmed
+    debug_text = ''
+    if debug_rsi
+        debug_text := debug_text + 'RSI: ' + str.format('{0,number,#.##}', rsi) + '\n'
+    if debug_volume
+        debug_text := debug_text + 'Vol: ' + (high_volume ? 'HIGH' : 'NORM') + '\n'
+    if debug_macd
+        debug_text := debug_text + 'MACD: ' + str.format('{0,number,#.##}', macd_histogram) + '\n'
+    if debug_momentum
+        debug_text := debug_text + 'Mom: ' + str.format('{0,number,#.##}', price_momentum) + '\n'
+    debug_text := debug_text + 'Cluster: ' + str.tostring(cluster) + '\n'
+    debug_text := debug_text + 'Trend: ' + (trend_bullish ? 'BULL' : trend_bearish ? 'BEAR' : 'NEUT') + '\n'
+    
+    if strong_buy_condition
+        debug_text := debug_text + 'STRONG BUY!'
+    else if buy_condition
+        debug_text := debug_text + 'BUY'
+    else if strong_sell_condition
+        debug_text := debug_text + 'STRONG SELL!'
+    else if sell_condition
+        debug_text := debug_text + 'SELL'
+    else
+        debug_text := debug_text + 'NO SIGNAL'
+    
+    label.new(bar_index, high + atr_7, text = debug_text, style = label.style_label_down, color = color.new(color.blue, 80), textcolor = color.white, size = size.small)
 
 if barstate.islast
-    var data_table = table.new(position=position.top_right, columns=4, rows=4, bgcolor = chart.bg_color, border_width=1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
-    table.cell(data_table, text_halign=text.align_center, column=0, row=0, text="Cluster Number (Volatility Level)", text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=1, row=0, text="Cluster Centroid (ATR)", text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=2, row=0, text="Cluster Size (No. of Data Points in Each Cluster)", text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=3, row=0, text="Current Volatility", text_color = chart.fg_color)
+    // Main data table
+    var data_table = table.new(position = position.top_right, columns = 4, rows = 4, bgcolor = chart.bg_color, border_width = 1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
+    
+    // Debug table
+    if show_debug_table
+        var debug_table = table.new(position = position.top_left, columns = 2, rows = 15, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.white, frame_color = color.white, frame_width = 1)
+        
+        table.cell(debug_table, 0, 0, 'DEBUG INFO', text_color = color.yellow, text_size = size.normal)
+        table.cell(debug_table, 1, 0, 'VALUE', text_color = color.yellow, text_size = size.normal)
+        
+        table.cell(debug_table, 0, 1, 'Current Signal', text_color = color.white)
+        signal_text = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
+        signal_color = strong_buy_condition ? strong_green : buy_condition ? green : strong_sell_condition ? strong_red : sell_condition ? red : color.gray
+        table.cell(debug_table, 1, 1, signal_text, text_color = signal_color)
+        
+        table.cell(debug_table, 0, 2, 'RSI', text_color = color.white)
+        table.cell(debug_table, 1, 2, str.format('{0,number,#.##}', rsi), text_color = rsi > 70 ? color.red : rsi < 30 ? color.green : color.white)
+        
+        table.cell(debug_table, 0, 3, 'MACD Histogram', text_color = color.white)
+        table.cell(debug_table, 1, 3, str.format('{0,number,#.##}', macd_histogram), text_color = macd_histogram > 0 ? color.green : color.red)
+        
+        table.cell(debug_table, 0, 4, 'Volume Status', text_color = color.white)
+        table.cell(debug_table, 1, 4, high_volume ? 'HIGH' : 'NORMAL', text_color = high_volume ? color.yellow : color.white)
+        
+        table.cell(debug_table, 0, 5, 'Price Momentum', text_color = color.white)
+        table.cell(debug_table, 1, 5, str.format('{0,number,#.##}', price_momentum), text_color = price_momentum > 0 ? color.green : color.red)
+        
+        table.cell(debug_table, 0, 6, 'Trend Direction', text_color = color.white)
+        trend_text = trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL'
+        trend_color = trend_bullish ? color.green : trend_bearish ? color.red : color.gray
+        table.cell(debug_table, 1, 6, trend_text, text_color = trend_color)
+        
+        table.cell(debug_table, 0, 7, 'Volatility Cluster', text_color = color.white)
+        cluster_text = cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW'
+        cluster_color = cluster == 0 ? color.red : cluster == 1 ? color.yellow : color.green
+        table.cell(debug_table, 1, 7, cluster_text, text_color = cluster_color)
+        
+        table.cell(debug_table, 0, 8, 'SuperTrend Dir', text_color = color.white)
+        table.cell(debug_table, 1, 8, dir > 0 ? 'BULLISH' : 'BEARISH', text_color = dir > 0 ? color.green : color.red)
+        
+        table.cell(debug_table, 0, 9, 'EMA 20 vs 50', text_color = color.white)
+        table.cell(debug_table, 1, 9, ema_20 > ema_50 ? 'EMA20 > EMA50' : 'EMA20 < EMA50', text_color = ema_20 > ema_50 ? color.green : color.red)
+        
+        table.cell(debug_table, 0, 10, 'Volume Ratio', text_color = color.white)
+        volume_ratio = volume / volume_avg
+        table.cell(debug_table, 1, 10, str.format('{0,number,#.##}x', volume_ratio), text_color = volume_ratio > volume_threshold ? color.yellow : color.white)
+        
+        table.cell(debug_table, 0, 11, 'ATR (7)', text_color = color.white)
+        table.cell(debug_table, 1, 11, str.format('{0,number,#.##}', atr_7), text_color = color.white)
+        
+        // Alert Debug Information
+        if debug_alerts
+            table.cell(debug_table, 0, 12, 'Webhooks Enabled', text_color = color.white)
+            table.cell(debug_table, 1, 12, enable_webhooks ? 'YES' : 'NO', text_color = enable_webhooks ? color.green : color.red)
+            
+            table.cell(debug_table, 0, 13, 'Bar Confirmed', text_color = color.white)
+            table.cell(debug_table, 1, 13, barstate.isconfirmed ? 'YES' : 'NO', text_color = barstate.isconfirmed ? color.green : color.red)
+            
+            table.cell(debug_table, 0, 14, 'Alert Ready', text_color = color.white)
+            alert_ready = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
+            table.cell(debug_table, 1, 14, alert_ready ? 'YES' : 'NO', text_color = alert_ready ? color.green : color.red)
+    table.cell(data_table, text_halign = text.align_center, column = 0, row = 0, text = 'Cluster Number (Volatility Level)', text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 1, row = 0, text = 'Cluster Centroid (ATR)', text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 2, row = 0, text = 'Cluster Size (No. of Data Points in Each Cluster)', text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 3, row = 0, text = 'Current Volatility', text_color = chart.fg_color)
 
-    table.cell(data_table, text_halign=text.align_center, column=0, row=1, text="3 (High)", text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=0, row=2, text= "2 (Medium)", text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=0, row=3, text= "1 (Low)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 0, row = 1, text = '3 (High)', text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 0, row = 2, text = '2 (Medium)', text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 0, row = 3, text = '1 (Low)', text_color = chart.fg_color)
 
-    table.cell(data_table, text_halign=text.align_center, column=1, row=1, text=str.format("{0,number,#.##}", hv_new), text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=1, row=2, text=str.format("{0,number,#.##}", mv_new), text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=1, row=3, text=str.format("{0,number,#.##}", lv_new), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 1, row = 1, text = str.format('{0,number,#.##}', hv_new), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 1, row = 2, text = str.format('{0,number,#.##}', mv_new), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 1, row = 3, text = str.format('{0,number,#.##}', lv_new), text_color = chart.fg_color)
 
-    table.cell(data_table, text_halign=text.align_center, column=2, row=1, text=str.format("{0,number,#.##}", size_c), text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=2, row=2, text=str.format("{0,number,#.##}", size_b), text_color = chart.fg_color)
-    table.cell(data_table, text_halign=text.align_center, column=2, row=3, text=str.format("{0,number,#.##}", size_a), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 2, row = 1, text = str.format('{0,number,#.##}', size_c), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 2, row = 2, text = str.format('{0,number,#.##}', size_b), text_color = chart.fg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 2, row = 3, text = str.format('{0,number,#.##}', size_a), text_color = chart.fg_color)
 
-    table.cell(data_table, text_halign=text.align_center, column=3, row=1, text="HIGH " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
-    table.cell(data_table, text_halign=text.align_center, column=3, row=2, text="MEDIUM " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
-    table.cell(data_table, text_halign=text.align_center, column=3, row=3, text="LOW " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 3, row = 1, text = 'HIGH ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 3, row = 2, text = 'MEDIUM ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
+    table.cell(data_table, text_halign = text.align_center, column = 3, row = 3, text = 'LOW ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
 
     if cluster == 0
         data_table.cell_set_bgcolor(3, 1, chart.fg_color)
@@ -157,12 +309,60 @@ if barstate.islast
     else
         data_table.cell_set_bgcolor(3, 3, chart.bg_color)
 
-////////////////////////////Alerts
-// Buy and Sell Alerts
-alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "🟢 BUY SIGNAL - Bullish Trend Shift", "SuperTrend changed to bullish trend. Consider buying.")
-alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "🔴 SELL SIGNAL - Bearish Trend Shift", "SuperTrend changed to bearish trend. Consider selling.")
+////////////////////////////Enhanced Alerts
+// Strong Buy Alert
+alertcondition(strong_buy_condition and barstate.isconfirmed, '🟢 STRONG BUY SIGNAL', 'Strong buy signal detected! High probability bullish reversal with volume confirmation.')
+
+// Regular Buy Alert
+alertcondition(buy_condition and barstate.isconfirmed, '🟢 BUY SIGNAL', 'Buy signal detected. SuperTrend changed to bullish trend.')
+
+// Strong Sell Alert
+alertcondition(strong_sell_condition and barstate.isconfirmed, '🔴 STRONG SELL SIGNAL', 'Strong sell signal detected! High probability bearish reversal with volume confirmation.')
+
+// Regular Sell Alert
+alertcondition(sell_condition and barstate.isconfirmed, '🔴 SELL SIGNAL', 'Sell signal detected. SuperTrend changed to bearish trend.')
 
 // Volatility Level Alerts
-alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, "High Volatility Detected", "Market entered high volatility state")
-alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, "Medium Volatility Detected", "Market entered medium volatility state")
-alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility Detected", "Market entered low volatility state")
+alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, 'High Volatility Detected', 'Market entered high volatility state')
+alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, 'Medium Volatility Detected', 'Market entered medium volatility state')
+alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, 'Low Volatility Detected', 'Market entered low volatility state')
+
+////////////////////////////Webhook Alerts for Signum.money
+// Strong Buy Webhook
+alertcondition(strong_buy_condition and barstate.isconfirmed and enable_webhooks, 'Webhook: Strong Buy', 'Strong Buy Signal - Check webhook settings for JSON payload')
+
+// Regular Buy Webhook
+alertcondition(buy_condition and barstate.isconfirmed and enable_webhooks, 'Webhook: Buy', 'Buy Signal - Check webhook settings for JSON payload')
+
+// Strong Sell Webhook
+alertcondition(strong_sell_condition and barstate.isconfirmed and enable_webhooks, 'Webhook: Strong Sell', 'Strong Sell Signal - Check webhook settings for JSON payload')
+
+// Regular Sell Webhook
+alertcondition(sell_condition and barstate.isconfirmed and enable_webhooks, 'Webhook: Sell', 'Sell Signal - Check webhook settings for JSON payload')
+
+// Dynamic webhook alerts using alert() function with TradingView placeholders
+if strong_buy_condition and barstate.isconfirmed and enable_webhooks
+    alert('{"action": "buy", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, high + atr_7 * 2, text = 'ALERT: STRONG BUY WEBHOOK SENT', style = label.style_label_down, color = color.new(color.green, 20), textcolor = color.white, size = size.normal)
+
+if buy_condition and barstate.isconfirmed and enable_webhooks
+    alert('{"action": "buy", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, high + atr_7 * 2, text = 'ALERT: BUY WEBHOOK SENT', style = label.style_label_down, color = color.new(color.green, 20), textcolor = color.white, size = size.normal)
+
+if strong_sell_condition and barstate.isconfirmed and enable_webhooks
+    alert('{"action": "sell", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, low - atr_7 * 2, text = 'ALERT: STRONG SELL WEBHOOK SENT', style = label.style_label_up, color = color.new(color.red, 20), textcolor = color.white, size = size.normal)
+
+if sell_condition and barstate.isconfirmed and enable_webhooks
+    alert('{"action": "sell", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, low - atr_7 * 2, text = 'ALERT: SELL WEBHOOK SENT', style = label.style_label_up, color = color.new(color.red, 20), textcolor = color.white, size = size.normal)
+
+// Test Alert for debugging
+if test_alert and barstate.isconfirmed and bar_index % 10 == 0
+    alert('{"action": "buy", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, high + atr_7 * 3, text = 'TEST ALERT SENT', style = label.style_label_down, color = color.new(color.blue, 20), textcolor = color.white, size = size.normal)
