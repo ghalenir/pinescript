@@ -158,9 +158,11 @@ if barstate.islast
         data_table.cell_set_bgcolor(3, 3, chart.bg_color)
 
 ////////////////////////////Alerts
-alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "Bullish Trend Shift")
-alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "Bearish Trend Shift")
-alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, "High Volatility")
-alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, "Medium Volatility")
-alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility")
-alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility")
+// Buy and Sell Alerts
+alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "🟢 BUY SIGNAL - Bullish Trend Shift", "SuperTrend changed to bullish trend. Consider buying.")
+alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "🔴 SELL SIGNAL - Bearish Trend Shift", "SuperTrend changed to bearish trend. Consider selling.")
+
+// Volatility Level Alerts
+alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, "High Volatility Detected", "Market entered high volatility state")
+alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, "Medium Volatility Detected", "Market entered medium volatility state")
+alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility Detected", "Market entered low volatility state")
