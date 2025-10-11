@@ -211,68 +211,79 @@ if show_debug_labels and barstate.isconfirmed
     
     label.new(bar_index, high + atr_7, text = debug_text, style = label.style_label_down, color = color.new(color.blue, 80), textcolor = color.white, size = size.small)
 
-if barstate.islast
-    // Main data table
-    var data_table = table.new(position = position.top_right, columns = 4, rows = 4, bgcolor = chart.bg_color, border_width = 1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
+// Real-time signal status indicator
+if show_debug_table
+    var signal_status_table = table.new(position = position.top_center, columns = 1, rows = 2, bgcolor = color.new(color.black, 30), border_width = 2, border_color = color.white, frame_color = color.white, frame_width = 2)
     
-    // Debug table
-    if show_debug_table
-        var debug_table = table.new(position = position.top_left, columns = 2, rows = 15, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.white, frame_color = color.white, frame_width = 1)
+    // Current signal status
+    current_signal = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
+    signal_color = strong_buy_condition ? strong_green : buy_condition ? green : strong_sell_condition ? strong_red : sell_condition ? red : color.gray
+    
+    table.cell(signal_status_table, 0, 0, 'CURRENT SIGNAL', text_color = color.yellow, text_size = size.normal)
+    table.cell(signal_status_table, 0, 1, current_signal, text_color = signal_color, text_size = size.large)
+
+// Real-time debug table (updates on every bar)
+if show_debug_table
+    var debug_table = table.new(position = position.top_left, columns = 2, rows = 15, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.white, frame_color = color.white, frame_width = 1)
+    
+    table.cell(debug_table, 0, 0, 'DEBUG INFO', text_color = color.yellow, text_size = size.normal)
+    table.cell(debug_table, 1, 0, 'VALUE', text_color = color.yellow, text_size = size.normal)
+    
+    table.cell(debug_table, 0, 1, 'Current Signal', text_color = color.white)
+    signal_text = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
+    signal_color = strong_buy_condition ? strong_green : buy_condition ? green : strong_sell_condition ? strong_red : sell_condition ? red : color.gray
+    table.cell(debug_table, 1, 1, signal_text, text_color = signal_color)
+    
+    table.cell(debug_table, 0, 2, 'RSI', text_color = color.white)
+    table.cell(debug_table, 1, 2, str.format('{0,number,#.##}', rsi), text_color = rsi > 70 ? color.red : rsi < 30 ? color.green : color.white)
+    
+    table.cell(debug_table, 0, 3, 'MACD Histogram', text_color = color.white)
+    table.cell(debug_table, 1, 3, str.format('{0,number,#.##}', macd_histogram), text_color = macd_histogram > 0 ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 4, 'Volume Status', text_color = color.white)
+    table.cell(debug_table, 1, 4, high_volume ? 'HIGH' : 'NORMAL', text_color = high_volume ? color.yellow : color.white)
+    
+    table.cell(debug_table, 0, 5, 'Price Momentum', text_color = color.white)
+    table.cell(debug_table, 1, 5, str.format('{0,number,#.##}', price_momentum), text_color = price_momentum > 0 ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 6, 'Trend Direction', text_color = color.white)
+    trend_text = trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL'
+    trend_color = trend_bullish ? color.green : trend_bearish ? color.red : color.gray
+    table.cell(debug_table, 1, 6, trend_text, text_color = trend_color)
+    
+    table.cell(debug_table, 0, 7, 'Volatility Cluster', text_color = color.white)
+    cluster_text = cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW'
+    cluster_color = cluster == 0 ? color.red : cluster == 1 ? color.yellow : color.green
+    table.cell(debug_table, 1, 7, cluster_text, text_color = cluster_color)
+    
+    table.cell(debug_table, 0, 8, 'SuperTrend Dir', text_color = color.white)
+    table.cell(debug_table, 1, 8, dir > 0 ? 'BULLISH' : 'BEARISH', text_color = dir > 0 ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 9, 'EMA 20 vs 50', text_color = color.white)
+    table.cell(debug_table, 1, 9, ema_20 > ema_50 ? 'EMA20 > EMA50' : 'EMA20 < EMA50', text_color = ema_20 > ema_50 ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 10, 'Volume Ratio', text_color = color.white)
+    volume_ratio = volume / volume_avg
+    table.cell(debug_table, 1, 10, str.format('{0,number,#.##}x', volume_ratio), text_color = volume_ratio > volume_threshold ? color.yellow : color.white)
+    
+    table.cell(debug_table, 0, 11, 'ATR (7)', text_color = color.white)
+    table.cell(debug_table, 1, 11, str.format('{0,number,#.##}', atr_7), text_color = color.white)
+    
+    // Alert Debug Information
+    if debug_alerts
+        table.cell(debug_table, 0, 12, 'Webhooks Enabled', text_color = color.white)
+        table.cell(debug_table, 1, 12, enable_webhooks ? 'YES' : 'NO', text_color = enable_webhooks ? color.green : color.red)
         
-        table.cell(debug_table, 0, 0, 'DEBUG INFO', text_color = color.yellow, text_size = size.normal)
-        table.cell(debug_table, 1, 0, 'VALUE', text_color = color.yellow, text_size = size.normal)
+        table.cell(debug_table, 0, 13, 'Bar Confirmed', text_color = color.white)
+        table.cell(debug_table, 1, 13, barstate.isconfirmed ? 'YES' : 'NO', text_color = barstate.isconfirmed ? color.green : color.red)
         
-        table.cell(debug_table, 0, 1, 'Current Signal', text_color = color.white)
-        signal_text = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
-        signal_color = strong_buy_condition ? strong_green : buy_condition ? green : strong_sell_condition ? strong_red : sell_condition ? red : color.gray
-        table.cell(debug_table, 1, 1, signal_text, text_color = signal_color)
-        
-        table.cell(debug_table, 0, 2, 'RSI', text_color = color.white)
-        table.cell(debug_table, 1, 2, str.format('{0,number,#.##}', rsi), text_color = rsi > 70 ? color.red : rsi < 30 ? color.green : color.white)
-        
-        table.cell(debug_table, 0, 3, 'MACD Histogram', text_color = color.white)
-        table.cell(debug_table, 1, 3, str.format('{0,number,#.##}', macd_histogram), text_color = macd_histogram > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 4, 'Volume Status', text_color = color.white)
-        table.cell(debug_table, 1, 4, high_volume ? 'HIGH' : 'NORMAL', text_color = high_volume ? color.yellow : color.white)
-        
-        table.cell(debug_table, 0, 5, 'Price Momentum', text_color = color.white)
-        table.cell(debug_table, 1, 5, str.format('{0,number,#.##}', price_momentum), text_color = price_momentum > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 6, 'Trend Direction', text_color = color.white)
-        trend_text = trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL'
-        trend_color = trend_bullish ? color.green : trend_bearish ? color.red : color.gray
-        table.cell(debug_table, 1, 6, trend_text, text_color = trend_color)
-        
-        table.cell(debug_table, 0, 7, 'Volatility Cluster', text_color = color.white)
-        cluster_text = cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW'
-        cluster_color = cluster == 0 ? color.red : cluster == 1 ? color.yellow : color.green
-        table.cell(debug_table, 1, 7, cluster_text, text_color = cluster_color)
-        
-        table.cell(debug_table, 0, 8, 'SuperTrend Dir', text_color = color.white)
-        table.cell(debug_table, 1, 8, dir > 0 ? 'BULLISH' : 'BEARISH', text_color = dir > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 9, 'EMA 20 vs 50', text_color = color.white)
-        table.cell(debug_table, 1, 9, ema_20 > ema_50 ? 'EMA20 > EMA50' : 'EMA20 < EMA50', text_color = ema_20 > ema_50 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 10, 'Volume Ratio', text_color = color.white)
-        volume_ratio = volume / volume_avg
-        table.cell(debug_table, 1, 10, str.format('{0,number,#.##}x', volume_ratio), text_color = volume_ratio > volume_threshold ? color.yellow : color.white)
-        
-        table.cell(debug_table, 0, 11, 'ATR (7)', text_color = color.white)
-        table.cell(debug_table, 1, 11, str.format('{0,number,#.##}', atr_7), text_color = color.white)
-        
-        // Alert Debug Information
-        if debug_alerts
-            table.cell(debug_table, 0, 12, 'Webhooks Enabled', text_color = color.white)
-            table.cell(debug_table, 1, 12, enable_webhooks ? 'YES' : 'NO', text_color = enable_webhooks ? color.green : color.red)
-            
-            table.cell(debug_table, 0, 13, 'Bar Confirmed', text_color = color.white)
-            table.cell(debug_table, 1, 13, barstate.isconfirmed ? 'YES' : 'NO', text_color = barstate.isconfirmed ? color.green : color.red)
-            
-            table.cell(debug_table, 0, 14, 'Alert Ready', text_color = color.white)
-            alert_ready = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
-            table.cell(debug_table, 1, 14, alert_ready ? 'YES' : 'NO', text_color = alert_ready ? color.green : color.red)
+        table.cell(debug_table, 0, 14, 'Alert Ready', text_color = color.white)
+        alert_ready = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
+        table.cell(debug_table, 1, 14, alert_ready ? 'YES' : 'NO', text_color = alert_ready ? color.green : color.red)
+
+// Main data table (only on last bar)
+if barstate.islast
+    var data_table = table.new(position = position.top_right, columns = 4, rows = 4, bgcolor = chart.bg_color, border_width = 1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
     table.cell(data_table, text_halign = text.align_center, column = 0, row = 0, text = 'Cluster Number (Volatility Level)', text_color = chart.fg_color)
     table.cell(data_table, text_halign = text.align_center, column = 1, row = 0, text = 'Cluster Centroid (ATR)', text_color = chart.fg_color)
     table.cell(data_table, text_halign = text.align_center, column = 2, row = 0, text = 'Cluster Size (No. of Data Points in Each Cluster)', text_color = chart.fg_color)
@@ -366,3 +377,16 @@ if test_alert and barstate.isconfirmed and bar_index % 10 == 0
     alert('{"action": "buy", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '"}', alert.freq_once_per_bar)
     if debug_alerts
         label.new(bar_index, high + atr_7 * 3, text = 'TEST ALERT SENT', style = label.style_label_down, color = color.new(color.blue, 20), textcolor = color.white, size = size.normal)
+
+// Real-time alert status indicator
+if show_debug_table
+    var alert_status_table = table.new(position = position.top_right, columns = 1, rows = 3, bgcolor = color.new(color.black, 30), border_width = 2, border_color = color.white, frame_color = color.white, frame_width = 2)
+    
+    // Alert status
+    alert_fired = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
+    alert_status = alert_fired ? 'ALERT SENT!' : enable_webhooks ? 'READY' : 'DISABLED'
+    alert_status_color = alert_fired ? color.yellow : enable_webhooks ? color.green : color.red
+    
+    table.cell(alert_status_table, 0, 0, 'ALERT STATUS', text_color = color.yellow, text_size = size.normal)
+    table.cell(alert_status_table, 0, 1, alert_status, text_color = alert_status_color, text_size = size.large)
+    table.cell(alert_status_table, 0, 2, 'Webhooks: ' + (enable_webhooks ? 'ON' : 'OFF'), text_color = enable_webhooks ? color.green : color.red, text_size = size.small)
