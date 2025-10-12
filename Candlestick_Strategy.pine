@@ -1,0 +1,297 @@
+//@version=6
+indicator('Candlestick Pattern Strategy', 'Candlestick Bot', overlay = true, max_labels_count = 500)
+
+// Input Settings
+// Pattern Detection Settings
+enable_hammer = input.bool(true, 'Enable Hammer Pattern', group = 'Pattern Settings')
+enable_engulfing = input.bool(true, 'Enable Engulfing Patterns', group = 'Pattern Settings')
+enable_doji = input.bool(true, 'Enable Doji Patterns', group = 'Pattern Settings')
+enable_star_patterns = input.bool(true, 'Enable Star Patterns', group = 'Pattern Settings')
+enable_three_patterns = input.bool(true, 'Enable Three-Candle Patterns', group = 'Pattern Settings')
+
+// Technical Confirmation Settings
+use_rsi_confirmation = input.bool(true, 'Use RSI Confirmation', group = 'Technical Confirmation')
+rsi_period = input.int(14, 'RSI Period', group = 'Technical Confirmation')
+rsi_oversold = input.int(30, 'RSI Oversold Level', group = 'Technical Confirmation')
+rsi_overbought = input.int(70, 'RSI Overbought Level', group = 'Technical Confirmation')
+
+use_volume_confirmation = input.bool(true, 'Use Volume Confirmation', group = 'Technical Confirmation')
+volume_multiplier = input.float(1.5, 'Volume Multiplier', minval = 1.0, group = 'Technical Confirmation')
+
+use_trend_confirmation = input.bool(true, 'Use Trend Confirmation', group = 'Technical Confirmation')
+ema_fast = input.int(20, 'Fast EMA Period', group = 'Technical Confirmation')
+ema_slow = input.int(50, 'Slow EMA Period', group = 'Technical Confirmation')
+
+// Webhook Settings
+webhook_url = input.string('https://signals.signum.money/trading', 'Webhook URL', group = 'Webhook Settings')
+bot_id = input.string('4vH63Kjr', 'Bot ID', group = 'Webhook Settings')
+order_size = input.string('100%', 'Order Size', group = 'Webhook Settings')
+enable_webhooks = input.bool(true, 'Enable Webhook Alerts', group = 'Webhook Settings')
+
+// Debug Settings
+show_debug_table = input.bool(true, 'Show Debug Table', group = 'Debug Settings')
+show_pattern_labels = input.bool(true, 'Show Pattern Labels', group = 'Debug Settings')
+debug_alerts = input.bool(true, 'Debug Alerts', group = 'Debug Settings')
+
+// Technical Indicators
+rsi = ta.rsi(close, rsi_period)
+ema_20 = ta.ema(close, ema_fast)
+ema_50 = ta.ema(close, ema_slow)
+volume_avg = ta.sma(volume, 20)
+high_volume = volume > volume_avg * volume_multiplier
+trend_bullish = ema_20 > ema_50
+trend_bearish = ema_20 < ema_50
+
+// Candlestick Pattern Detection Functions
+// Bullish Patterns
+is_hammer() =>
+    body_size = math.abs(close - open)
+    lower_shadow = math.min(open, close) - low
+    upper_shadow = high - math.max(open, close)
+    lower_shadow > body_size * 2 and upper_shadow < body_size * 0.5
+
+is_inverted_hammer() =>
+    body_size = math.abs(close - open)
+    lower_shadow = math.min(open, close) - low
+    upper_shadow = high - math.max(open, close)
+    upper_shadow > body_size * 2 and lower_shadow < body_size * 0.5
+
+is_bullish_engulfing() =>
+    prev_body = math.abs(close[1] - open[1])
+    curr_body = math.abs(close - open)
+    close > open and close[1] < open[1] and close > open[1] and open < close[1] and curr_body > prev_body
+
+is_piercing_line() =>
+    prev_body = math.abs(close[1] - open[1])
+    curr_body = math.abs(close - open)
+    close > open and close[1] < open[1] and close > (open[1] + close[1]) / 2 and open < close[1]
+
+is_morning_star() =>
+    first_candle = close[2] < open[2]
+    second_candle = math.abs(close[1] - open[1]) < math.abs(close[2] - open[2]) * 0.3
+    third_candle = close > open and close > (open[2] + close[2]) / 2
+
+is_three_white_soldiers() =>
+    close > open and close[1] > open[1] and close[2] > open[2] and
+    close > close[1] and close[1] > close[2] and
+    open > open[1] and open[1] > open[2]
+
+// Bearish Patterns
+is_hanging_man() =>
+    body_size = math.abs(close - open)
+    lower_shadow = math.min(open, close) - low
+    upper_shadow = high - math.max(open, close)
+    lower_shadow > body_size * 2 and upper_shadow < body_size * 0.5
+
+is_shooting_star() =>
+    body_size = math.abs(close - open)
+    lower_shadow = math.min(open, close) - low
+    upper_shadow = high - math.max(open, close)
+    upper_shadow > body_size * 2 and lower_shadow < body_size * 0.5
+
+is_bearish_engulfing() =>
+    prev_body = math.abs(close[1] - open[1])
+    curr_body = math.abs(close - open)
+    close < open and close[1] > open[1] and close < open[1] and open > close[1] and curr_body > prev_body
+
+is_dark_cloud_cover() =>
+    prev_body = math.abs(close[1] - open[1])
+    curr_body = math.abs(close - open)
+    close < open and close[1] > open[1] and close < (open[1] + close[1]) / 2 and open > close[1]
+
+is_evening_star() =>
+    first_candle = close[2] > open[2]
+    second_candle = math.abs(close[1] - open[1]) < math.abs(close[2] - open[2]) * 0.3
+    third_candle = close < open and close < (open[2] + close[2]) / 2
+
+is_three_black_crows() =>
+    close < open and close[1] < open[1] and close[2] < open[2] and
+    close < close[1] and close[1] < close[2] and
+    open < open[1] and open[1] < open[2]
+
+// Doji Patterns
+is_doji() =>
+    body_size = math.abs(close - open)
+    total_range = high - low
+    body_size < total_range * 0.1
+
+is_gravestone_doji() =>
+    is_doji() and high - math.max(open, close) > math.abs(close - open) * 2
+
+is_dragonfly_doji() =>
+    is_doji() and math.min(open, close) - low > math.abs(close - open) * 2
+
+// Pattern Strength Calculation
+bullish_pattern_strength = 0
+bearish_pattern_strength = 0
+
+// Strong Bullish Patterns (3 points each)
+if enable_engulfing and is_bullish_engulfing()
+    bullish_pattern_strength += 3
+if enable_star_patterns and is_morning_star()
+    bullish_pattern_strength += 3
+if enable_three_patterns and is_three_white_soldiers()
+    bullish_pattern_strength += 3
+
+// Medium Bullish Patterns (2 points each)
+if enable_hammer and is_hammer()
+    bullish_pattern_strength += 2
+if enable_engulfing and is_piercing_line()
+    bullish_pattern_strength += 2
+if enable_doji and is_dragonfly_doji()
+    bullish_pattern_strength += 2
+
+// Weak Bullish Patterns (1 point each)
+if enable_hammer and is_inverted_hammer()
+    bullish_pattern_strength += 1
+
+// Strong Bearish Patterns (3 points each)
+if enable_engulfing and is_bearish_engulfing()
+    bearish_pattern_strength += 3
+if enable_star_patterns and is_evening_star()
+    bearish_pattern_strength += 3
+if enable_three_patterns and is_three_black_crows()
+    bearish_pattern_strength += 3
+
+// Medium Bearish Patterns (2 points each)
+if enable_hammer and is_hanging_man()
+    bearish_pattern_strength += 2
+if enable_engulfing and is_dark_cloud_cover()
+    bearish_pattern_strength += 2
+if enable_doji and is_gravestone_doji()
+    bearish_pattern_strength += 2
+
+// Weak Bearish Patterns (1 point each)
+if enable_hammer and is_shooting_star()
+    bearish_pattern_strength += 1
+
+// Pattern Confirmation
+strong_bullish_candlestick = bullish_pattern_strength >= 3
+medium_bullish_candlestick = bullish_pattern_strength >= 2
+weak_bullish_candlestick = bullish_pattern_strength >= 1
+
+strong_bearish_candlestick = bearish_pattern_strength >= 3
+medium_bearish_candlestick = bearish_pattern_strength >= 2
+weak_bearish_candlestick = bearish_pattern_strength >= 1
+
+// Current Pattern Name
+current_pattern = strong_bullish_candlestick ? "Strong Bullish Pattern" : 
+                 medium_bullish_candlestick ? "Medium Bullish Pattern" :
+                 weak_bullish_candlestick ? "Weak Bullish Pattern" :
+                 strong_bearish_candlestick ? "Strong Bearish Pattern" :
+                 medium_bearish_candlestick ? "Medium Bearish Pattern" :
+                 weak_bearish_candlestick ? "Weak Bearish Pattern" :
+                 is_doji() ? "Doji Pattern" : "No Pattern"
+
+// Signal Generation with Technical Confirmation
+// Strong Buy Signals
+strong_buy_condition = (strong_bullish_candlestick or medium_bullish_candlestick) and (
+    not use_rsi_confirmation or rsi < rsi_overbought) and (
+    not use_volume_confirmation or high_volume) and (
+    not use_trend_confirmation or trend_bullish)
+
+// Regular Buy Signals
+buy_condition = weak_bullish_candlestick and not strong_buy_condition and (
+    not use_rsi_confirmation or rsi < rsi_overbought) and (
+    not use_volume_confirmation or high_volume) and (
+    not use_trend_confirmation or trend_bullish)
+
+// Strong Sell Signals
+strong_sell_condition = (strong_bearish_candlestick or medium_bearish_candlestick) and (
+    not use_rsi_confirmation or rsi > rsi_oversold) and (
+    not use_volume_confirmation or high_volume) and (
+    not use_trend_confirmation or trend_bearish)
+
+// Regular Sell Signals
+sell_condition = weak_bearish_candlestick and not strong_sell_condition and (
+    not use_rsi_confirmation or rsi > rsi_oversold) and (
+    not use_volume_confirmation or high_volume) and (
+    not use_trend_confirmation or trend_bearish)
+
+// Visual Indicators
+// Signal Labels
+plotshape(strong_buy_condition and barstate.isconfirmed, 'Strong Buy', shape.labelup, location.belowbar, color.new(color.lime, 0), text = '🟢 STRONG BUY', textcolor = color.white, size = size.normal)
+plotshape(buy_condition and barstate.isconfirmed, 'Buy', shape.labelup, location.belowbar, color.new(color.green, 0), text = '🟢 BUY', textcolor = color.white, size = size.small)
+plotshape(strong_sell_condition and barstate.isconfirmed, 'Strong Sell', shape.labeldown, location.abovebar, color.new(color.red, 0), text = '🔴 STRONG SELL', textcolor = color.white, size = size.normal)
+plotshape(sell_condition and barstate.isconfirmed, 'Sell', shape.labeldown, location.abovebar, color.new(color.orange, 0), text = '🔴 SELL', textcolor = color.white, size = size.small)
+
+// Pattern Indicators
+plotshape(strong_bullish_candlestick and barstate.isconfirmed and show_pattern_labels, 'Strong Bullish Pattern', shape.triangleup, location.belowbar, color.new(color.lime, 0), size = size.small)
+plotshape(medium_bullish_candlestick and barstate.isconfirmed and show_pattern_labels, 'Medium Bullish Pattern', shape.triangleup, location.belowbar, color.new(color.green, 30), size = size.tiny)
+plotshape(strong_bearish_candlestick and barstate.isconfirmed and show_pattern_labels, 'Strong Bearish Pattern', shape.triangledown, location.abovebar, color.new(color.red, 0), size = size.small)
+plotshape(medium_bearish_candlestick and barstate.isconfirmed and show_pattern_labels, 'Medium Bearish Pattern', shape.triangledown, location.abovebar, color.new(color.red, 30), size = size.tiny)
+plotshape(is_doji() and barstate.isconfirmed and show_pattern_labels, 'Doji Pattern', shape.diamond, location.abovebar, color.new(color.yellow, 0), size = size.tiny)
+
+// Debug Table
+if show_debug_table
+    var debug_table = table.new(position = position.top_left, columns = 2, rows = 12, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.white, frame_color = color.white, frame_width = 1)
+    
+    table.cell(debug_table, 0, 0, 'CANDLESTICK DEBUG', text_color = color.yellow, text_size = size.normal)
+    table.cell(debug_table, 1, 0, 'VALUE', text_color = color.yellow, text_size = size.normal)
+    
+    table.cell(debug_table, 0, 1, 'Current Pattern', text_color = color.white)
+    pattern_color = strong_bullish_candlestick ? color.lime : medium_bullish_candlestick ? color.green : 
+                   strong_bearish_candlestick ? color.red : medium_bearish_candlestick ? color.orange :
+                   is_doji() ? color.yellow : color.gray
+    table.cell(debug_table, 1, 1, current_pattern, text_color = pattern_color)
+    
+    table.cell(debug_table, 0, 2, 'Bullish Strength', text_color = color.white)
+    table.cell(debug_table, 1, 2, str.tostring(bullish_pattern_strength), text_color = bullish_pattern_strength > 0 ? color.green : color.gray)
+    
+    table.cell(debug_table, 0, 3, 'Bearish Strength', text_color = color.white)
+    table.cell(debug_table, 1, 3, str.tostring(bearish_pattern_strength), text_color = bearish_pattern_strength > 0 ? color.red : color.gray)
+    
+    table.cell(debug_table, 0, 4, 'RSI', text_color = color.white)
+    table.cell(debug_table, 1, 4, str.format('{0,number,#.##}', rsi), text_color = rsi > rsi_overbought ? color.red : rsi < rsi_oversold ? color.green : color.white)
+    
+    table.cell(debug_table, 0, 5, 'Volume Status', text_color = color.white)
+    table.cell(debug_table, 1, 5, high_volume ? 'HIGH' : 'NORMAL', text_color = high_volume ? color.yellow : color.white)
+    
+    table.cell(debug_table, 0, 6, 'Trend Direction', text_color = color.white)
+    trend_text = trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL'
+    trend_color = trend_bullish ? color.green : trend_bearish ? color.red : color.gray
+    table.cell(debug_table, 1, 6, trend_text, text_color = trend_color)
+    
+    table.cell(debug_table, 0, 7, 'Current Signal', text_color = color.white)
+    signal_text = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
+    signal_color = strong_buy_condition ? color.lime : buy_condition ? color.green : strong_sell_condition ? color.red : sell_condition ? color.orange : color.gray
+    table.cell(debug_table, 1, 7, signal_text, text_color = signal_color)
+    
+    table.cell(debug_table, 0, 8, 'Webhooks Enabled', text_color = color.white)
+    table.cell(debug_table, 1, 8, enable_webhooks ? 'YES' : 'NO', text_color = enable_webhooks ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 9, 'Bar Confirmed', text_color = color.white)
+    table.cell(debug_table, 1, 9, barstate.isconfirmed ? 'YES' : 'NO', text_color = barstate.isconfirmed ? color.green : color.red)
+    
+    table.cell(debug_table, 0, 10, 'Alert Ready', text_color = color.white)
+    alert_ready = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
+    table.cell(debug_table, 1, 10, alert_ready ? 'YES' : 'NO', text_color = alert_ready ? color.green : color.red)
+
+// Webhook Alerts
+// Strong Buy Alert
+if strong_buy_condition and barstate.isconfirmed and enable_webhooks
+    webhook_payload = '{"action": "buy", "signal_strength": "strong", "ticker": "' + syminfo.ticker + '", "order_size": "100%", "position_size": "100%", "schema": "2", "timestamp": "' + str.tostring(time, "yyyy-MM-ddTHH:mm:ssZ") + '", "bot_id": "4vH63Kjr", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + '}, "market_conditions": {"trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "rsi_level": "' + (rsi > rsi_overbought ? 'OVERBOUGHT' : rsi < rsi_oversold ? 'OVERSOLD' : 'NEUTRAL') + '"}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_confirmation": ' + str.tostring(rsi < rsi_overbought) + ', "trend_confirmation": ' + str.tostring(trend_bullish) + '}, "candlestick_patterns": {"current_pattern": "' + current_pattern + '", "bullish_strength": ' + str.tostring(bullish_pattern_strength) + ', "bearish_strength": ' + str.tostring(bearish_pattern_strength) + ', "strong_bullish": ' + str.tostring(strong_bullish_candlestick) + ', "medium_bullish": ' + str.tostring(medium_bullish_candlestick) + ', "strong_bearish": ' + str.tostring(strong_bearish_candlestick) + ', "medium_bearish": ' + str.tostring(medium_bearish_candlestick) + ', "is_doji": ' + str.tostring(is_doji()) + '}}'
+    alert(webhook_payload, alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, high + 10, text = 'ALERT: STRONG BUY WEBHOOK SENT', style = label.style_label_down, color = color.new(color.green, 20), textcolor = color.white, size = size.normal)
+
+// Regular Buy Alert
+if buy_condition and barstate.isconfirmed and enable_webhooks
+    webhook_payload = '{"action": "buy", "signal_strength": "regular", "ticker": "' + syminfo.ticker + '", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "' + str.tostring(time, "yyyy-MM-ddTHH:mm:ssZ") + '", "bot_id": "' + bot_id + '", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + '}, "market_conditions": {"trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "rsi_level": "' + (rsi > rsi_overbought ? 'OVERBOUGHT' : rsi < rsi_oversold ? 'OVERSOLD' : 'NEUTRAL') + '"}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_confirmation": ' + str.tostring(rsi < rsi_overbought) + ', "trend_confirmation": ' + str.tostring(trend_bullish) + '}, "candlestick_patterns": {"current_pattern": "' + current_pattern + '", "bullish_strength": ' + str.tostring(bullish_pattern_strength) + ', "bearish_strength": ' + str.tostring(bearish_pattern_strength) + ', "strong_bullish": ' + str.tostring(strong_bullish_candlestick) + ', "medium_bullish": ' + str.tostring(medium_bullish_candlestick) + ', "strong_bearish": ' + str.tostring(strong_bearish_candlestick) + ', "medium_bearish": ' + str.tostring(medium_bearish_candlestick) + ', "is_doji": ' + str.tostring(is_doji()) + '}}'
+    alert(webhook_payload, alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, high + 10, text = 'ALERT: BUY WEBHOOK SENT', style = label.style_label_down, color = color.new(color.green, 20), textcolor = color.white, size = size.normal)
+
+// Strong Sell Alert
+if strong_sell_condition and barstate.isconfirmed and enable_webhooks
+    webhook_payload = '{"action": "sell", "signal_strength": "strong", "ticker": "' + syminfo.ticker + '", "order_size": "100%", "position_size": "100%", "schema": "2", "timestamp": "' + str.tostring(time, "yyyy-MM-ddTHH:mm:ssZ") + '", "bot_id": "4vH63Kjr", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + '}, "market_conditions": {"trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "rsi_level": "' + (rsi > rsi_overbought ? 'OVERBOUGHT' : rsi < rsi_oversold ? 'OVERSOLD' : 'NEUTRAL') + '"}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_confirmation": ' + str.tostring(rsi > rsi_oversold) + ', "trend_confirmation": ' + str.tostring(trend_bearish) + '}, "candlestick_patterns": {"current_pattern": "' + current_pattern + '", "bullish_strength": ' + str.tostring(bullish_pattern_strength) + ', "bearish_strength": ' + str.tostring(bearish_pattern_strength) + ', "strong_bullish": ' + str.tostring(strong_bullish_candlestick) + ', "medium_bullish": ' + str.tostring(medium_bullish_candlestick) + ', "strong_bearish": ' + str.tostring(strong_bearish_candlestick) + ', "medium_bearish": ' + str.tostring(medium_bearish_candlestick) + ', "is_doji": ' + str.tostring(is_doji()) + '}}'
+    alert(webhook_payload, alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, low - 10, text = 'ALERT: STRONG SELL WEBHOOK SENT', style = label.style_label_up, color = color.new(color.red, 20), textcolor = color.white, size = size.normal)
+
+// Regular Sell Alert
+if sell_condition and barstate.isconfirmed and enable_webhooks
+    webhook_payload = '{"action": "sell", "signal_strength": "regular", "ticker": "' + syminfo.ticker + '", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "' + str.tostring(time, "yyyy-MM-ddTHH:mm:ssZ") + '", "bot_id": "' + bot_id + '", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + '}, "market_conditions": {"trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "rsi_level": "' + (rsi > rsi_overbought ? 'OVERBOUGHT' : rsi < rsi_oversold ? 'OVERSOLD' : 'NEUTRAL') + '"}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_confirmation": ' + str.tostring(rsi > rsi_oversold) + ', "trend_confirmation": ' + str.tostring(trend_bearish) + '}, "candlestick_patterns": {"current_pattern": "' + current_pattern + '", "bullish_strength": ' + str.tostring(bullish_pattern_strength) + ', "bearish_strength": ' + str.tostring(bearish_pattern_strength) + ', "strong_bullish": ' + str.tostring(strong_bullish_candlestick) + ', "medium_bullish": ' + str.tostring(medium_bullish_candlestick) + ', "strong_bearish": ' + str.tostring(strong_bearish_candlestick) + ', "medium_bearish": ' + str.tostring(medium_bearish_candlestick) + ', "is_doji": ' + str.tostring(is_doji()) + '}}'
+    alert(webhook_payload, alert.freq_once_per_bar)
+    if debug_alerts
+        label.new(bar_index, low - 10, text = 'ALERT: SELL WEBHOOK SENT', style = label.style_label_up, color = color.new(color.red, 20), textcolor = color.white, size = size.normal)
