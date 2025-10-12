@@ -363,12 +363,8 @@ alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, 'Low V
 // These alerts generate dynamic JSON payloads with actual calculated values
 // Use these alert names in your webhook settings to get real-time data
 
-// Alert conditions that will show up in the dropdown
-// NOTE: These use TradingView placeholders only. For dynamic values, use the alert() function calls below.
-alertcondition(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', 'Strong buy signal detected with dynamic JSON payload')
-alertcondition(buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Buy', 'Buy signal detected with dynamic JSON payload')
-alertcondition(strong_sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Strong Sell', 'Strong sell signal detected with dynamic JSON payload')
-alertcondition(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Sell', 'Sell signal detected with dynamic JSON payload')
+// NOTE: Use "Any alert() function call" in TradingView alert setup to get dynamic values
+// The alert() function calls below generate real calculated values, not placeholders
 
 // Visual indicators for webhook alerts
 plotshape(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', shape.circle, location.belowbar, color.new(color.green, 0), size = size.small)
