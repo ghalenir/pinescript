@@ -1,5 +1,5 @@
 //@version=6
-indicator('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
+strategy('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
 import TradingView/ta/7
 atr_len = input.int(10, 'ATR Length', group = 'SuperTrend Settings')
 fact = input.float(3, 'SuperTrend Factor', group = 'SuperTrend Settings')
