@@ -1,241 +1,404 @@
 //@version=6
+// Declares this script uses Pine Script version 6 syntax and features
 indicator('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
+// Creates a TradingView indicator with title 'AI+ML Trading Bot', short name 'AI+ML Bot',
+// overlay=true means it displays on the price chart, max_labels_count=500 limits label display
 import TradingView/ta/7
+// Imports technical analysis functions from TradingView's built-in library version 7
 atr_len = input.int(10, 'ATR Length', group = 'SuperTrend Settings')
+// Creates an integer input field for ATR (Average True Range) calculation period, default 10, grouped under 'SuperTrend Settings'
 fact = input.float(3, 'SuperTrend Factor', group = 'SuperTrend Settings')
+// Creates a float input field for SuperTrend multiplier factor, default 3.0, grouped under 'SuperTrend Settings'
 training_data_period = input.int(100, 'Training Data Length', group = 'K-Means Settings')
+// Creates integer input for K-means clustering training period, default 100 bars, grouped under 'K-Means Settings'
 highvol = input.float(0.75, 'Initial High volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'high volatility\' area is, a value of 0.75 will take the 75th percentile of the range of ATR values over the training data period')
+// Creates float input for high volatility cluster initial guess (75th percentile), max value 1.0, with tooltip explanation
 midvol = input.float(0.5, 'Initial Medium volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'medium volatility\' area is, a value of 0.5 will take the 50th percentile of the range of ATR values over the training data period')
+// Creates float input for medium volatility cluster initial guess (50th percentile), max value 1.0, with tooltip explanation
 lowvol = input.float(0.25, 'Initial Low volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'low volatility\' area is, a value of 0.25 will take the 25th percentile of the range of ATR values over the training data period')
+// Creates float input for low volatility cluster initial guess (25th percentile), max value 1.0, with tooltip explanation
 t1 = input.int(70, 'Transparency 1', maxval = 100, minval = 0, group = 'Appearance')
+// Creates integer input for first transparency level (70% opacity), range 0-100, grouped under 'Appearance'
 t2 = input.int(95, 'Transparency 2', maxval = 100, minval = 0, group = 'Appearance')
+// Creates integer input for second transparency level (95% opacity), range 0-100, grouped under 'Appearance'
 green = input.color(#00ffbb, 'Bullish Color', group = 'Appearance')
+// Creates color input for bullish signals, default cyan color #00ffbb, grouped under 'Appearance'
 red = input.color(#ff1100, 'Bearish Color', group = 'Appearance')
+// Creates color input for bearish signals, default red color #ff1100, grouped under 'Appearance'
 strong_green = input.color(#00ff00, 'Strong Bullish Color', group = 'Appearance')
+// Creates color input for strong bullish signals, default bright green #00ff00, grouped under 'Appearance'
 strong_red = input.color(#ff0000, 'Strong Bearish Color', group = 'Appearance')
+// Creates color input for strong bearish signals, default bright red #ff0000, grouped under 'Appearance'
 
 // Signal Strength Settings
 volume_threshold = input.float(1.5, 'Volume Threshold Multiplier', minval = 1.0, group = 'Signal Strength')
+// Creates float input for volume threshold multiplier (1.5x average volume), minimum 1.0, grouped under 'Signal Strength'
 rsi_period = input.int(14, 'RSI Period', group = 'Signal Strength')
+// Creates integer input for RSI calculation period, default 14, grouped under 'Signal Strength'
 momentum_period = input.int(14, 'Momentum Period', group = 'Signal Strength')
+// Creates integer input for price momentum calculation period, default 14, grouped under 'Signal Strength'
 
 // Webhook Settings
 webhook_url = input.string('https://signals.signum.money/trading', 'Webhook URL', group = 'Webhook Settings')
+// Creates string input for webhook URL endpoint, default trading webhook URL, grouped under 'Webhook Settings'
 bot_id = input.string('4vH63Kjr', 'Bot ID', group = 'Webhook Settings')
+// Creates string input for trading bot identifier, default '4vH63Kjr', grouped under 'Webhook Settings'
 order_size = input.string('100%', 'Order Size', group = 'Webhook Settings')
+// Creates string input for order size percentage, default '100%', grouped under 'Webhook Settings'
 enable_webhooks = input.bool(true, 'Enable Webhook Alerts', group = 'Webhook Settings')
+// Creates boolean input to enable/disable webhook alerts, default true, grouped under 'Webhook Settings'
 
 // Debug Settings
 show_debug_table = input.bool(true, 'Show Debug Table', group = 'Debug Settings')
+// Creates boolean input to show/hide debug information table, default true, grouped under 'Debug Settings'
 show_debug_labels = input.bool(false, 'Show Debug Labels', group = 'Debug Settings')
+// Creates boolean input to show/hide debug labels on chart, default false, grouped under 'Debug Settings'
 debug_rsi = input.bool(true, 'Debug RSI', group = 'Debug Settings')
+// Creates boolean input to include RSI in debug output, default true, grouped under 'Debug Settings'
 debug_volume = input.bool(true, 'Debug Volume', group = 'Debug Settings')
+// Creates boolean input to include volume data in debug output, default true, grouped under 'Debug Settings'
 debug_macd = input.bool(true, 'Debug MACD', group = 'Debug Settings')
+// Creates boolean input to include MACD data in debug output, default true, grouped under 'Debug Settings'
 debug_momentum = input.bool(true, 'Debug Momentum', group = 'Debug Settings')
+// Creates boolean input to include momentum data in debug output, default true, grouped under 'Debug Settings'
 debug_alerts = input.bool(true, 'Debug Alerts', group = 'Debug Settings')
+// Creates boolean input to include alert information in debug output, default true, grouped under 'Debug Settings'
 test_alert = input.bool(false, 'Test Alert (Every 10 bars)', group = 'Debug Settings')
+// Creates boolean input to enable test alerts every 10 bars, default false, grouped under 'Debug Settings'
 
 pine_supertrend(factor, atr) =>
+    // Defines a function to calculate SuperTrend indicator with adaptive ATR
     src = hl2
+    // Sets source price as average of high and low (hl2)
     upperBand = src + factor * atr
+    // Calculates upper SuperTrend band: source price + (factor × ATR)
     lowerBand = src - factor * atr
+    // Calculates lower SuperTrend band: source price - (factor × ATR)
     prevLowerBand = nz(lowerBand[1])
+    // Gets previous lower band value, using nz() to handle null values (returns 0 if null)
     prevUpperBand = nz(upperBand[1])
+    // Gets previous upper band value, using nz() to handle null values (returns 0 if null)
 
     lowerBand := lowerBand > prevLowerBand or close[1] < prevLowerBand ? lowerBand : prevLowerBand
+    // Updates lower band: keeps current value if it's higher than previous OR if previous close was below previous lower band
     upperBand := upperBand < prevUpperBand or close[1] > prevUpperBand ? upperBand : prevUpperBand
+    // Updates upper band: keeps current value if it's lower than previous OR if previous close was above previous upper band
     int _direction = na
+    // Declares integer variable for SuperTrend direction (1 = bullish, -1 = bearish)
     float superTrend = na
+    // Declares float variable for SuperTrend value
     prevSuperTrend = superTrend[1]
+    // Gets previous SuperTrend value for comparison
     if na(atr[1])
+        // If previous ATR is null (first bar), set initial direction to bullish
         _direction := 1
         _direction
     else if prevSuperTrend == prevUpperBand
+        // If previous SuperTrend was at upper band, check if price breaks above upper band
         _direction := close > upperBand ? -1 : 1
+        // If close > upper band, direction becomes bearish (-1), otherwise bullish (1)
         _direction
     else
+        // If previous SuperTrend was at lower band, check if price breaks below lower band
         _direction := close < lowerBand ? 1 : -1
+        // If close < lower band, direction becomes bullish (1), otherwise bearish (-1)
         _direction
     superTrend := _direction == -1 ? lowerBand : upperBand
+    // Sets SuperTrend value: if bearish (-1) use lower band, if bullish (1) use upper band
     [superTrend, _direction]
+    // Returns both SuperTrend value and direction as a tuple
 
 volatility = ta.atr(atr_len)
+// Calculates Average True Range (ATR) using the specified period for volatility measurement
 
 upper = ta.highest(volatility, training_data_period)
+// Finds the highest ATR value over the training data period for K-means clustering
 lower = ta.lowest(volatility, training_data_period)
+// Finds the lowest ATR value over the training data period for K-means clustering
 
 high_volatility = lower + (upper - lower) * highvol
+// Calculates initial high volatility threshold: lower bound + (range × 0.75) for 75th percentile
 medium_volatility = lower + (upper - lower) * midvol
+// Calculates initial medium volatility threshold: lower bound + (range × 0.5) for 50th percentile
 low_volatility = lower + (upper - lower) * lowvol
+// Calculates initial low volatility threshold: lower bound + (range × 0.25) for 25th percentile
 
 iterations = 0
+// Initializes counter for K-means clustering iterations
 
 size_a = 0
+// Initializes counter for high volatility cluster size
 size_b = 0
+// Initializes counter for medium volatility cluster size
 size_c = 0
+// Initializes counter for low volatility cluster size
 
 hv = array.new_float()
+// Creates empty array to store high volatility data points
 mv = array.new_float()
+// Creates empty array to store medium volatility data points
 lv = array.new_float()
+// Creates empty array to store low volatility data points
 amean = array.new_float(1, high_volatility)
+// Creates array with initial high volatility centroid (mean) value
 bmean = array.new_float(1, medium_volatility)
+// Creates array with initial medium volatility centroid (mean) value
 cmean = array.new_float(1, low_volatility)
+// Creates array with initial low volatility centroid (mean) value
 
 if nz(volatility) > 0 and bar_index >= training_data_period - 1
+// Executes K-means clustering only when volatility is valid and we have enough training data
 
     while (amean.size() == 1 ? true : amean.first() != amean.get(1)) or (bmean.size() == 1 ? true : bmean.first() != bmean.get(1)) or (cmean.size() == 1 ? true : cmean.first() != cmean.get(1))
+    // K-means convergence loop: continues until centroids stop changing (convergence achieved)
         hv.clear()
+        // Clears high volatility cluster array for new iteration
         mv.clear()
+        // Clears medium volatility cluster array for new iteration
         lv.clear()
+        // Clears low volatility cluster array for new iteration
         for i = training_data_period - 1 to 0 by 1
+        // Iterates through training data period backwards (most recent to oldest)
             _1 = math.abs(volatility[i] - amean.first())
+            // Calculates distance from current volatility point to high volatility centroid
             _2 = math.abs(volatility[i] - bmean.first())
+            // Calculates distance from current volatility point to medium volatility centroid
             _3 = math.abs(volatility[i] - cmean.first())
+            // Calculates distance from current volatility point to low volatility centroid
             if _1 < _2 and _1 < _3
+                // If closest to high volatility centroid, assign to high volatility cluster
                 hv.unshift(volatility[i])
+                // Adds volatility value to high volatility cluster array (unshift adds to beginning)
 
             if _2 < _1 and _2 < _3
+                // If closest to medium volatility centroid, assign to medium volatility cluster
                 mv.unshift(volatility[i])
+                // Adds volatility value to medium volatility cluster array (unshift adds to beginning)
 
             if _3 < _1 and _3 < _2
+                // If closest to low volatility centroid, assign to low volatility cluster
                 lv.unshift(volatility[i])
+                // Adds volatility value to low volatility cluster array (unshift adds to beginning)
 
         amean.unshift(hv.avg())
+        // Updates high volatility centroid with average of all points in high volatility cluster
         bmean.unshift(mv.avg())
+        // Updates medium volatility centroid with average of all points in medium volatility cluster
         cmean.unshift(lv.avg())
+        // Updates low volatility centroid with average of all points in low volatility cluster
         size_a := hv.size()
+        // Records number of data points in high volatility cluster
         size_b := mv.size()
+        // Records number of data points in medium volatility cluster
         size_c := lv.size()
+        // Records number of data points in low volatility cluster
         iterations := iterations + 1
+        // Increments iteration counter
         iterations
+        // Returns iteration count (Pine Script requirement for while loop)
 
 hv_new = amean.first()
+// Gets the final high volatility centroid value (first element in array)
 mv_new = bmean.first()
+// Gets the final medium volatility centroid value (first element in array)
 lv_new = cmean.first()
+// Gets the final low volatility centroid value (first element in array)
 vdist_a = math.abs(volatility - hv_new)
+// Calculates distance from current volatility to high volatility centroid
 vdist_b = math.abs(volatility - mv_new)
+// Calculates distance from current volatility to medium volatility centroid
 vdist_c = math.abs(volatility - lv_new)
+// Calculates distance from current volatility to low volatility centroid
 
 distances = array.new_float()
+// Creates array to store distances to each centroid
 centroids = array.new_float()
+// Creates array to store centroid values
 
 distances.push(vdist_a)
+// Adds distance to high volatility centroid to distances array
 distances.push(vdist_b)
+// Adds distance to medium volatility centroid to distances array
 distances.push(vdist_c)
+// Adds distance to low volatility centroid to distances array
 
 centroids.push(hv_new)
+// Adds high volatility centroid value to centroids array
 centroids.push(mv_new)
+// Adds medium volatility centroid value to centroids array
 centroids.push(lv_new)
+// Adds low volatility centroid value to centroids array
 
 cluster = distances.indexof(distances.min()) // 0 for high, 1 for medium, 2 for low
+// Finds index of minimum distance (closest centroid) - 0=high, 1=medium, 2=low volatility
 assigned_centroid = cluster == -1 ? na : centroids.get(cluster)
+// Gets the centroid value for the assigned cluster, returns na if no cluster assigned
 
 [ST, dir] = pine_supertrend(fact, assigned_centroid)
+// Calculates SuperTrend using the adaptive ATR (assigned_centroid) and returns both SuperTrend value and direction
 
 // Enhanced Signal Strength Detection
 volume_avg = ta.sma(volume, 20)
+// Calculates 20-period simple moving average of volume for volume analysis
 high_volume = volume > volume_avg * volume_threshold
+// Determines if current volume is above threshold (1.5x average volume by default)
 
 // Technical indicators for signal strength
 rsi = ta.rsi(close, rsi_period)
+// Calculates Relative Strength Index using specified period (default 14)
 macd_line = ta.ema(close, 12) - ta.ema(close, 26)
+// Calculates MACD line: 12-period EMA minus 26-period EMA
 macd_signal = ta.ema(macd_line, 9)
+// Calculates MACD signal line: 9-period EMA of MACD line
 macd_histogram = macd_line - macd_signal
+// Calculates MACD histogram: difference between MACD line and signal line
 
 // Additional Moving Averages
 sma_10 = ta.sma(close, 10)
+// Calculates 10-period simple moving average of closing prices
 sma_20 = ta.sma(close, 20)
+// Calculates 20-period simple moving average of closing prices
 sma_50 = ta.sma(close, 50)
+// Calculates 50-period simple moving average of closing prices
 sma_100 = ta.sma(close, 100)
+// Calculates 100-period simple moving average of closing prices
 sma_200 = ta.sma(close, 200)
+// Calculates 200-period simple moving average of closing prices
 
 // MA is the same as SMA in Pine Script
 ma_10 = ta.sma(close, 10)
+// Alternative naming for 10-period moving average (same as sma_10)
 ma_20 = ta.sma(close, 20)
+// Alternative naming for 20-period moving average (same as sma_20)
 ma_50 = ta.sma(close, 50)
+// Alternative naming for 50-period moving average (same as sma_50)
 
 // Additional EMAs
 ema_10 = ta.ema(close, 10)
+// Calculates 10-period exponential moving average of closing prices
 ema_100 = ta.ema(close, 100)
+// Calculates 100-period exponential moving average of closing prices
 ema_200 = ta.ema(close, 200)
+// Calculates 200-period exponential moving average of closing prices
 
 // Additional technical indicators for #3 features
 bb_upper = ta.sma(close, 20) + (ta.stdev(close, 20) * 2)
+// Calculates Bollinger Bands upper band: 20-period SMA + (2 × 20-period standard deviation)
 bb_lower = ta.sma(close, 20) - (ta.stdev(close, 20) * 2)
+// Calculates Bollinger Bands lower band: 20-period SMA - (2 × 20-period standard deviation)
 bb_middle = ta.sma(close, 20)
+// Calculates Bollinger Bands middle band: 20-period simple moving average
 
 // Trend confirmation
 ema_20 = ta.ema(close, 20)
+// Calculates 20-period exponential moving average for trend analysis
 ema_50 = ta.ema(close, 50)
+// Calculates 50-period exponential moving average for trend analysis
 trend_bullish = ema_20 > ema_50
+// Determines bullish trend: 20-period EMA above 50-period EMA
 trend_bearish = ema_20 < ema_50
+// Determines bearish trend: 20-period EMA below 50-period EMA
 
 // Price momentum
 price_momentum = close - close[momentum_period]
+// Calculates price momentum: current close minus close from momentum_period bars ago
 strong_bullish_momentum = price_momentum > 0 and close > open
+// Determines strong bullish momentum: positive price momentum AND bullish candle (close > open)
 strong_bearish_momentum = price_momentum < 0 and close < open
+// Determines strong bearish momentum: negative price momentum AND bearish candle (close < open)
 
 // Additional market conditions for #3 features
 price_vs_bb_upper = close > bb_upper
+// Checks if current price is above Bollinger Bands upper band (potential overbought)
 price_vs_bb_lower = close < bb_lower
+// Checks if current price is below Bollinger Bands lower band (potential oversold)
 bb_squeeze = (bb_upper - bb_lower) / bb_middle < 0.1
+// Detects Bollinger Bands squeeze: band width less than 10% of middle band (low volatility)
 
 // Additional signal conditions for #3 features
 bb_breakout_bullish = close > bb_upper and close[1] <= bb_upper[1]
+// Detects bullish Bollinger Bands breakout: price breaks above upper band from below
 bb_breakout_bearish = close < bb_lower and close[1] >= bb_lower[1]
+// Detects bearish Bollinger Bands breakout: price breaks below lower band from above
 bb_squeeze_condition = bb_squeeze
+// Stores Bollinger Bands squeeze condition for signal analysis
 
 // ATR for label positioning
 atr_7 = ta.atr(7)
+// Calculates 7-period ATR for dynamic label positioning on chart
 
 // Signal strength conditions
 // Strong Buy conditions
 strong_buy_condition = ta.crossunder(dir, 0) and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
+// Strong buy signal: SuperTrend turns bullish AND (high volume + RSI not overbought + MACD bullish OR low volatility + strong momentum OR bullish trend + RSI in good range)
 
 // Regular Buy conditions (fires for both regular and strong buy signals)
 buy_condition = ta.crossunder(dir, 0)
+// Regular buy signal: SuperTrend direction changes from bearish to bullish (any SuperTrend crossover)
 
 // Strong Sell conditions
 strong_sell_condition = ta.crossover(dir, 0) and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
+// Strong sell signal: SuperTrend turns bearish AND (high volume + RSI not oversold + MACD bearish OR high volatility + strong bearish momentum OR bearish trend + RSI in good range)
 
 // Regular Sell conditions (fires for both regular and strong sell signals)
 sell_condition = ta.crossover(dir, 0)
+// Regular sell signal: SuperTrend direction changes from bullish to bearish (any SuperTrend crossover)
 
 upTrend = plot(close > ST ? ST : na, color = color.new(green, t1), style = plot.style_linebr) //, force_overlay = true
+// Plots SuperTrend line in green when price is above SuperTrend (bullish trend)
 downTrend = plot(close < ST ? ST : na, color = color.new(red, t1), style = plot.style_linebr, force_overlay = false) //, force_overlay = true
+// Plots SuperTrend line in red when price is below SuperTrend (bearish trend)
 bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, 'Body Middle', display = display.none)
+// Creates invisible plot for candle body middle (used for fill areas)
 
 fill(bodyMiddle, upTrend, (open + close) / 2, ST, color.new(green, t2), color.new(green, t1))
+// Fills area between candle body middle and SuperTrend when bullish (green gradient)
 fill(bodyMiddle, downTrend, ST, (open + close) / 2, color.new(red, t1), color.new(red, t2))
+// Fills area between SuperTrend and candle body middle when bearish (red gradient)
 
 label.new(bar_index, dir > 0 ? ST + atr_7 : ST - atr_7, text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
+// Creates invisible label showing volatility cluster number (3=high, 2=medium, 1=low) with gradient color
 
 // Debug Labels
 if show_debug_labels and barstate.isconfirmed
+    // Creates debug labels on chart when enabled and bar is confirmed
     debug_text = ''
+    // Initializes empty debug text string
     if debug_rsi
         debug_text := debug_text + 'RSI: ' + str.format('{0,number,#.##}', rsi) + '\n'
+        // Adds RSI value to debug text if RSI debugging is enabled
     if debug_volume
         debug_text := debug_text + 'Vol: ' + (high_volume ? 'HIGH' : 'NORM') + '\n'
+        // Adds volume status to debug text if volume debugging is enabled
     if debug_macd
         debug_text := debug_text + 'MACD: ' + str.format('{0,number,#.##}', macd_histogram) + '\n'
+        // Adds MACD histogram value to debug text if MACD debugging is enabled
     if debug_momentum
         debug_text := debug_text + 'Mom: ' + str.format('{0,number,#.##}', price_momentum) + '\n'
+        // Adds price momentum value to debug text if momentum debugging is enabled
     debug_text := debug_text + 'Cluster: ' + str.tostring(cluster) + '\n'
+    // Adds volatility cluster number to debug text
     debug_text := debug_text + 'Trend: ' + (trend_bullish ? 'BULL' : trend_bearish ? 'BEAR' : 'NEUT') + '\n'
+    // Adds trend direction to debug text
     
     if strong_buy_condition
         debug_text := debug_text + 'STRONG BUY!'
+        // Adds strong buy signal to debug text
     else if buy_condition
         debug_text := debug_text + 'BUY'
+        // Adds regular buy signal to debug text
     else if strong_sell_condition
         debug_text := debug_text + 'STRONG SELL!'
+        // Adds strong sell signal to debug text
     else if sell_condition
         debug_text := debug_text + 'SELL'
+        // Adds regular sell signal to debug text
     else
         debug_text := debug_text + 'NO SIGNAL'
+        // Adds no signal status to debug text
     
     label.new(bar_index, high + atr_7, text = debug_text, style = label.style_label_down, color = color.new(color.blue, 80), textcolor = color.white, size = size.small)
+    // Creates debug label above the bar with all debug information
 
 // Real-time signal status indicator
 if show_debug_table
@@ -373,8 +536,11 @@ plotshape(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Web
 // Dynamic webhook alerts using alert() function with TradingView placeholders
 // Strong Buy Alert with Dynamic Values
 if strong_buy_condition and barstate.isconfirmed and enable_webhooks
+    // Sends webhook alert when strong buy condition is met, bar is confirmed, and webhooks are enabled
     webhook_payload = '{"action": "buy", "signal_strength": "strong", "ticker": "{{ticker}}", "order_size": "100%", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "4vH63Kjr", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "macd_line": ' + str.format('{0,number,#.##}', macd_line) + ', "macd_signal": ' + str.format('{0,number,#.##}', macd_signal) + ', "macd_histogram": ' + str.format('{0,number,#.##}', macd_histogram) + ', "sma_10": ' + str.format('{0,number,#.##}', sma_10) + ', "sma_20": ' + str.format('{0,number,#.##}', sma_20) + ', "sma_50": ' + str.format('{0,number,#.##}', sma_50) + ', "sma_100": ' + str.format('{0,number,#.##}', sma_100) + ', "sma_200": ' + str.format('{0,number,#.##}', sma_200) + ', "ma_10": ' + str.format('{0,number,#.##}', ma_10) + ', "ma_20": ' + str.format('{0,number,#.##}', ma_20) + ', "ma_50": ' + str.format('{0,number,#.##}', ma_50) + ', "ema_10": ' + str.format('{0,number,#.##}', ema_10) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + ', "ema_100": ' + str.format('{0,number,#.##}', ema_100) + ', "ema_200": ' + str.format('{0,number,#.##}', ema_200) + ', "atr": ' + str.format('{0,number,#.##}', volatility) + ', "atr_7": ' + str.format('{0,number,#.##}', atr_7) + ', "bb_upper": ' + str.format('{0,number,#.##}', bb_upper) + ', "bb_lower": ' + str.format('{0,number,#.##}', bb_lower) + ', "bb_middle": ' + str.format('{0,number,#.##}', bb_middle) + '}, "market_conditions": {"volatility_cluster": ' + str.tostring(cluster) + ', "cluster_name": "' + (cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW') + '", "trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "price_momentum": ' + str.format('{0,number,#.##}', price_momentum) + ', "supertrend_direction": ' + str.tostring(dir) + ', "supertrend_value": ' + str.format('{0,number,#.##}', ST) + ', "price_vs_bb_upper": ' + str.tostring(price_vs_bb_upper) + ', "price_vs_bb_lower": ' + str.tostring(price_vs_bb_lower) + ', "bb_squeeze": ' + str.tostring(bb_squeeze) + '}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_oversold": ' + str.tostring(rsi < 30) + ', "rsi_overbought": ' + str.tostring(rsi > 70) + ', "macd_bullish": ' + str.tostring(macd_histogram > 0) + ', "trend_alignment": ' + str.tostring(trend_bullish) + ', "momentum_bullish": ' + str.tostring(strong_bullish_momentum) + ', "bb_breakout_bullish": ' + str.tostring(bb_breakout_bullish) + ', "bb_breakout_bearish": ' + str.tostring(bb_breakout_bearish) + ', "bb_squeeze_condition": ' + str.tostring(bb_squeeze_condition) + '}}'
+    // Creates comprehensive JSON payload with all market data, technical indicators, and signal conditions
     alert(webhook_payload, alert.freq_once_per_bar)
+    // Sends webhook alert with the payload, frequency set to once per bar
 
 // Regular Buy Alert with Dynamic Values
 if buy_condition and barstate.isconfirmed and enable_webhooks
@@ -413,15 +579,25 @@ if show_debug_table
 
 // Clean, single BUY/SELL indicator with signal strength
 longSignal  = dir == 1 and dir[1] == -1
+// Detects long signal: SuperTrend direction changes from bearish (-1) to bullish (1)
 shortSignal = dir == -1 and dir[1] == 1
+// Detects short signal: SuperTrend direction changes from bullish (1) to bearish (-1)
 
 // Show clean BUY/SELL labels with signal strength
 if (longSignal and barstate.isconfirmed)
+    // Creates buy signal label when long signal is detected and bar is confirmed
     signal_text = strong_buy_condition ? "STRONG BUY" : "BUY"
+    // Sets signal text based on signal strength (strong buy vs regular buy)
     signal_color = strong_buy_condition ? color.new(color.lime, 0) : color.new(color.green, 0)
+    // Sets signal color: bright lime for strong buy, green for regular buy
     label.new(bar_index, low, signal_text, style=label.style_label_up, color=signal_color, textcolor=color.white, size=size.normal)
+    // Creates upward-pointing label below the bar with signal text and color
 
 if (shortSignal and barstate.isconfirmed)
+    // Creates sell signal label when short signal is detected and bar is confirmed
     signal_text = strong_sell_condition ? "STRONG SELL" : "SELL"
+    // Sets signal text based on signal strength (strong sell vs regular sell)
     signal_color = strong_sell_condition ? color.new(color.red, 0) : color.new(color.maroon, 0)
+    // Sets signal color: bright red for strong sell, dark red for regular sell
     label.new(bar_index, high, signal_text, style=label.style_label_down, color=signal_color, textcolor=color.white, size=size.normal)
+    // Creates downward-pointing label above the bar with signal text and color
