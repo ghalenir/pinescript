@@ -192,14 +192,14 @@ atr_7 = ta.atr(7)
 // Strong Buy conditions
 strong_buy_condition = ta.crossunder(dir, 0) and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
 
-// Regular Buy conditions
-buy_condition = ta.crossunder(dir, 0) and not strong_buy_condition
+// Regular Buy conditions (fires for both regular and strong buy signals)
+buy_condition = ta.crossunder(dir, 0)
 
 // Strong Sell conditions
 strong_sell_condition = ta.crossover(dir, 0) and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
 
-// Regular Sell conditions
-sell_condition = ta.crossover(dir, 0) and not strong_sell_condition
+// Regular Sell conditions (fires for both regular and strong sell signals)
+sell_condition = ta.crossover(dir, 0)
 
 upTrend = plot(close > ST ? ST : na, color = color.new(green, t1), style = plot.style_linebr) //, force_overlay = true
 downTrend = plot(close < ST ? ST : na, color = color.new(red, t1), style = plot.style_linebr, force_overlay = false) //, force_overlay = true
@@ -424,3 +424,13 @@ if show_debug_table
     table.cell(alert_status_table, 0, 0, 'ALERT STATUS', text_color = color.yellow, text_size = size.normal)
     table.cell(alert_status_table, 0, 1, alert_status, text_color = alert_status_color, text_size = size.large)
     table.cell(alert_status_table, 0, 2, 'Webhooks: ' + (enable_webhooks ? 'ON' : 'OFF'), text_color = enable_webhooks ? color.green : color.red, text_size = size.small)
+
+// Example signal detection logic — using SuperTrend direction
+longSignal  = dir == 1 and dir[1] == -1
+shortSignal = dir == -1 and dir[1] == 1
+
+// Show labels on chart
+if (longSignal)
+    label.new(bar_index, low, "BUY", style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white)
+if (shortSignal)
+    label.new(bar_index, high, "SELL", style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white)
