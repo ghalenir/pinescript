@@ -36,13 +36,64 @@ enable_webhooks = input.bool(true, 'Enable Webhook Alerts', group = 'Webhook Set
 
 // Debug Settings
 show_debug_table = input.bool(true, 'Show Debug Table', group = 'Debug Settings')
-show_debug_labels = input.bool(false, 'Show Debug Labels', group = 'Debug Settings')
+show_debug_labels = input.bool(true, 'Show Debug Labels', group = 'Debug Settings')
 debug_rsi = input.bool(true, 'Debug RSI', group = 'Debug Settings')
 debug_volume = input.bool(true, 'Debug Volume', group = 'Debug Settings')
 debug_macd = input.bool(true, 'Debug MACD', group = 'Debug Settings')
 debug_momentum = input.bool(true, 'Debug Momentum', group = 'Debug Settings')
 debug_alerts = input.bool(true, 'Debug Alerts', group = 'Debug Settings')
 test_alert = input.bool(false, 'Test Alert (Every 10 bars)', group = 'Debug Settings')
+
+// ============================================================================
+// TECHNICAL INDICATORS (declared early for function parameter access)
+// ============================================================================
+// Volume Analysis
+volume_avg = ta.sma(volume, 20)
+high_volume = volume > volume_avg * volume_threshold
+
+// RSI and MACD
+rsi = ta.rsi(close, rsi_period)
+macd_line = ta.ema(close, 12) - ta.ema(close, 26)
+macd_signal = ta.ema(macd_line, 9)
+macd_histogram = macd_line - macd_signal
+
+// Moving Averages
+sma_10 = ta.sma(close, 10)
+sma_20 = ta.sma(close, 20)
+sma_50 = ta.sma(close, 50)
+sma_100 = ta.sma(close, 100)
+sma_200 = ta.sma(close, 200)
+ma_10 = ta.sma(close, 10)
+ma_20 = ta.sma(close, 20)
+ma_50 = ta.sma(close, 50)
+ema_10 = ta.ema(close, 10)
+ema_20 = ta.ema(close, 20)
+ema_50 = ta.ema(close, 50)
+ema_100 = ta.ema(close, 100)
+ema_200 = ta.ema(close, 200)
+
+// Bollinger Bands
+bb_upper = ta.sma(close, 20) + (ta.stdev(close, 20) * 2)
+bb_lower = ta.sma(close, 20) - (ta.stdev(close, 20) * 2)
+bb_middle = ta.sma(close, 20)
+
+// Trend Analysis
+trend_bullish = ema_20 > ema_50
+trend_bearish = ema_20 < ema_50
+
+// Price Momentum
+price_momentum = close - close[momentum_period]
+strong_bullish_momentum = price_momentum > 0 and close > open
+strong_bearish_momentum = price_momentum < 0 and close < open
+
+// Bollinger Bands Conditions
+price_vs_bb_upper = close > bb_upper
+price_vs_bb_lower = close < bb_lower
+bb_squeeze = (bb_upper - bb_lower) / bb_middle < 0.1
+bb_breakout_bullish = close > bb_upper and close[1] <= bb_upper[1]
+bb_breakout_bearish = close < bb_lower and close[1] >= bb_lower[1]
+bb_squeeze_condition = bb_squeeze
+atr_7 = ta.atr(7)
 
 // ============================================================================
 // INPUT CONFIGURATION FUNCTION (removed - inputs now declared at top)
@@ -155,61 +206,10 @@ perform_kmeans_clustering(volatility, training_data_period, highvol, midvol, low
     [cluster, assigned_centroid, hv_new, mv_new, lv_new, size_a, size_b, size_c]
 
 // ============================================================================
-// TECHNICAL INDICATORS FUNCTION
+// TECHNICAL INDICATORS FUNCTION (removed - calculations moved to global scope)
 // ============================================================================
-calculate_technical_indicators(rsi_period, momentum_period, volume_threshold) =>
-    // Volume Analysis
-    volume_avg = ta.sma(volume, 20)
-    high_volume = volume > volume_avg * volume_threshold
-    
-    // RSI and MACD
-    rsi = ta.rsi(close, rsi_period)
-    macd_line = ta.ema(close, 12) - ta.ema(close, 26)
-    macd_signal = ta.ema(macd_line, 9)
-    macd_histogram = macd_line - macd_signal
-    
-    // Moving Averages
-    sma_10 = ta.sma(close, 10)
-    sma_20 = ta.sma(close, 20)
-    sma_50 = ta.sma(close, 50)
-    sma_100 = ta.sma(close, 100)
-    sma_200 = ta.sma(close, 200)
-    
-    ma_10 = ta.sma(close, 10)
-    ma_20 = ta.sma(close, 20)
-    ma_50 = ta.sma(close, 50)
-    
-    ema_10 = ta.ema(close, 10)
-    ema_20 = ta.ema(close, 20)
-    ema_50 = ta.ema(close, 50)
-    ema_100 = ta.ema(close, 100)
-    ema_200 = ta.ema(close, 200)
-    
-    // Bollinger Bands
-    bb_upper = ta.sma(close, 20) + (ta.stdev(close, 20) * 2)
-    bb_lower = ta.sma(close, 20) - (ta.stdev(close, 20) * 2)
-    bb_middle = ta.sma(close, 20)
-    
-    // Trend Analysis
-    trend_bullish = ema_20 > ema_50
-    trend_bearish = ema_20 < ema_50
-    
-    // Price Momentum
-    price_momentum = close - close[momentum_period]
-    strong_bullish_momentum = price_momentum > 0 and close > open
-    strong_bearish_momentum = price_momentum < 0 and close < open
-    
-    // Bollinger Bands Conditions
-    price_vs_bb_upper = close > bb_upper
-    price_vs_bb_lower = close < bb_lower
-    bb_squeeze = (bb_upper - bb_lower) / bb_middle < 0.1
-    bb_breakout_bullish = close > bb_upper and close[1] <= bb_upper[1]
-    bb_breakout_bearish = close < bb_lower and close[1] >= bb_lower[1]
-    
-    // ATR for positioning
-    atr_7 = ta.atr(7)
-    
-    [volume_avg, high_volume, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, bb_upper, bb_lower, bb_middle, trend_bullish, trend_bearish, price_momentum, strong_bullish_momentum, strong_bearish_momentum, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_breakout_bullish, bb_breakout_bearish, atr_7]
+// Note: All technical indicator calculations are now performed at global scope
+// for proper Pine Script v6 compatibility
 
 // ============================================================================
 // SIGNAL DETECTION FUNCTIONS
@@ -226,7 +226,7 @@ detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_mo
     buy_condition = longSignal and not strong_buy_condition
     
     // Strong Sell conditions - only when shortSignal is true
-    strong_sell_condition = shortSignal and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
+    strong_sell_condition = shortSignal and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30 or rsi > 60 and macd_histogram < 0)
     
     // Regular Sell conditions - when shortSignal is true but not strong
     sell_condition = shortSignal and not strong_sell_condition
@@ -270,7 +270,7 @@ create_signal_labels(longSignal, shortSignal, strong_buy_condition, strong_sell_
 // ============================================================================
 // DEBUG FUNCTIONS
 // ============================================================================
-create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, bar_index, high, atr_7) =>
+create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal, bar_index, high, atr_7) =>
     if show_debug_labels and barstate.isconfirmed
         debug_text = ''
         if debug_rsi
@@ -283,6 +283,15 @@ create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debu
             debug_text := debug_text + 'Mom: ' + str.format('{0,number,#.##}', price_momentum) + '\n'
         debug_text := debug_text + 'Cluster: ' + str.tostring(cluster) + '\n'
         debug_text := debug_text + 'Trend: ' + (trend_bullish ? 'BULL' : trend_bearish ? 'BEAR' : 'NEUT') + '\n'
+        
+        // Add signal analysis
+        if shortSignal
+            debug_text := debug_text + 'SHORT SIGNAL!\n'
+            debug_text := debug_text + 'Strong Sell Check:\n'
+            debug_text := debug_text + 'Vol+RSI+MACD: ' + str.tostring(high_volume and rsi > 30 and macd_histogram < 0) + '\n'
+            debug_text := debug_text + 'Cluster+Momentum: ' + str.tostring(cluster == 0 and strong_bearish_momentum) + '\n'
+            debug_text := debug_text + 'Trend+RSI: ' + str.tostring(trend_bearish and rsi < 50 and rsi > 30) + '\n'
+            debug_text := debug_text + 'RSI+MACD: ' + str.tostring(rsi > 60 and macd_histogram < 0) + '\n'
         
         if strong_buy_condition
             debug_text := debug_text + 'STRONG BUY!'
@@ -466,41 +475,7 @@ volatility = ta.atr(atr_len)
 // Calculate SuperTrend
 [ST, dir] = pine_supertrend(fact, assigned_centroid)
 
-// Calculate technical indicators
-volume_avg = ta.sma(volume, 20)
-high_volume = volume > volume_avg * volume_threshold
-rsi = ta.rsi(close, rsi_period)
-macd_line = ta.ema(close, 12) - ta.ema(close, 26)
-macd_signal = ta.ema(macd_line, 9)
-macd_histogram = macd_line - macd_signal
-sma_10 = ta.sma(close, 10)
-sma_20 = ta.sma(close, 20)
-sma_50 = ta.sma(close, 50)
-sma_100 = ta.sma(close, 100)
-sma_200 = ta.sma(close, 200)
-ma_10 = ta.sma(close, 10)
-ma_20 = ta.sma(close, 20)
-ma_50 = ta.sma(close, 50)
-ema_10 = ta.ema(close, 10)
-ema_20 = ta.ema(close, 20)
-ema_50 = ta.ema(close, 50)
-ema_100 = ta.ema(close, 100)
-ema_200 = ta.ema(close, 200)
-bb_upper = ta.sma(close, 20) + (ta.stdev(close, 20) * 2)
-bb_lower = ta.sma(close, 20) - (ta.stdev(close, 20) * 2)
-bb_middle = ta.sma(close, 20)
-trend_bullish = ema_20 > ema_50
-trend_bearish = ema_20 < ema_50
-price_momentum = close - close[momentum_period]
-strong_bullish_momentum = price_momentum > 0 and close > open
-strong_bearish_momentum = price_momentum < 0 and close < open
-price_vs_bb_upper = close > bb_upper
-price_vs_bb_lower = close < bb_lower
-bb_squeeze = (bb_upper - bb_lower) / bb_middle < 0.1
-bb_breakout_bullish = close > bb_upper and close[1] <= bb_upper[1]
-bb_breakout_bearish = close < bb_lower and close[1] >= bb_lower[1]
-bb_squeeze_condition = bb_squeeze
-atr_7 = ta.atr(7)
+// Technical indicators are now declared at the top of the script
 
 // Detect signals
 [strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal] = detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_momentum, trend_bullish, strong_bearish_momentum, trend_bearish)
@@ -508,8 +483,8 @@ atr_7 = ta.atr(7)
 // Execute all function-based operations at global scope
 create_volatility_label(bar_index, dir, ST, atr_7, cluster, red, green)
 create_signal_labels(longSignal, shortSignal, strong_buy_condition, strong_sell_condition, bar_index, low, high)
-create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, bar_index, high, atr_7)
-create_debug_tables(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, rsi, macd_histogram, high_volume, price_momentum, trend_bullish, trend_bearish, cluster, dir, ema_20, ema_50, volume, volume_avg, volume_threshold, atr_7, debug_alerts, enable_webhooks, strong_green, green, strong_red, red)
+// create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal, bar_index, high, atr_7)
+// create_debug_tables(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, rsi, macd_histogram, high_volume, price_momentum, trend_bullish, trend_bearish, cluster, dir, ema_20, ema_50, volume, volume_avg, volume_threshold, atr_7, debug_alerts, enable_webhooks, strong_green, green, strong_red, red)
 create_cluster_data_table(cluster, hv_new, mv_new, lv_new, size_c, size_b, size_a, volatility)
 send_webhook_alerts(strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, enable_webhooks, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
 send_test_alert(test_alert, bar_index, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum, debug_alerts)
