@@ -215,21 +215,21 @@ calculate_technical_indicators(rsi_period, momentum_period, volume_threshold) =>
 // SIGNAL DETECTION FUNCTIONS
 // ============================================================================
 detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_momentum, trend_bullish, strong_bearish_momentum, trend_bearish) =>
-    // Strong Buy conditions
-    strong_buy_condition = ta.crossunder(dir, 0) and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
-    
-    // Regular Buy conditions
-    buy_condition = ta.crossunder(dir, 0)
-    
-    // Strong Sell conditions
-    strong_sell_condition = ta.crossover(dir, 0) and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
-    
-    // Regular Sell conditions
-    sell_condition = ta.crossover(dir, 0)
-    
-    // Clean signal detection
+    // Clean signal detection - SuperTrend direction change
     longSignal = dir == 1 and dir[1] == -1
     shortSignal = dir == -1 and dir[1] == 1
+    
+    // Strong Buy conditions - only when longSignal is true
+    strong_buy_condition = longSignal and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
+    
+    // Regular Buy conditions - when longSignal is true but not strong
+    buy_condition = longSignal and not strong_buy_condition
+    
+    // Strong Sell conditions - only when shortSignal is true
+    strong_sell_condition = shortSignal and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30)
+    
+    // Regular Sell conditions - when shortSignal is true but not strong
+    sell_condition = shortSignal and not strong_sell_condition
     
     [strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal]
 
