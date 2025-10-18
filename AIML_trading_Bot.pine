@@ -18,8 +18,8 @@ lowvol = input.float(0.25, 'Initial Low volatility Percentile Guess', maxval = 1
 // Appearance Settings
 t1 = input.int(70, 'Transparency 1', maxval = 100, minval = 0, group = 'Appearance')
 t2 = input.int(95, 'Transparency 2', maxval = 100, minval = 0, group = 'Appearance')
-green = input.color(#00ffbb, 'Bullish Color', group = 'Appearance')
-red = input.color(#ff1100, 'Bearish Color', group = 'Appearance')
+green = input.color(#00cc66, 'Bullish Color', group = 'Appearance')
+red = input.color(#cc3333, 'Bearish Color', group = 'Appearance')
 strong_green = input.color(#00ff00, 'Strong Bullish Color', group = 'Appearance')
 strong_red = input.color(#ff0000, 'Strong Bearish Color', group = 'Appearance')
 
@@ -259,12 +259,12 @@ create_volatility_label(bar_index, dir, ST, atr_7, cluster, red, green) =>
 create_signal_labels(longSignal, shortSignal, strong_buy_condition, strong_sell_condition, bar_index, low, high) =>
     if (longSignal and barstate.isconfirmed)
         signal_text = strong_buy_condition ? "STRONG BUY" : "BUY"
-        signal_color = strong_buy_condition ? color.new(color.lime, 0) : color.new(color.green, 0)
+        signal_color = strong_buy_condition ? strong_green : green
         label.new(bar_index, low, signal_text, style=label.style_label_up, color=signal_color, textcolor=color.white, size=size.normal)
     
     if (shortSignal and barstate.isconfirmed)
         signal_text = strong_sell_condition ? "STRONG SELL" : "SELL"
-        signal_color = strong_sell_condition ? color.new(color.red, 0) : color.new(color.maroon, 0)
+        signal_color = strong_sell_condition ? strong_red : red
         label.new(bar_index, high, signal_text, style=label.style_label_down, color=signal_color, textcolor=color.white, size=size.normal)
 
 // ============================================================================
@@ -525,10 +525,10 @@ fill(bodyMiddle, upTrend, (open + close) / 2, ST, color.new(green, t2), color.ne
 fill(bodyMiddle, downTrend, ST, (open + close) / 2, color.new(red, t1), color.new(red, t2))
 
 // Webhook Alert Shapes
-plotshape(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', shape.circle, location.belowbar, color.new(color.green, 0), size = size.small)
-plotshape(buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Buy', shape.circle, location.belowbar, color.new(color.green, 0), size = size.tiny)
-plotshape(strong_sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Strong Sell', shape.circle, location.abovebar, color.new(color.red, 0), size = size.small)
-plotshape(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Sell', shape.circle, location.abovebar, color.new(color.red, 0), size = size.tiny)
+plotshape(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', shape.circle, location.belowbar, strong_green, size = size.small)
+plotshape(buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Buy', shape.circle, location.belowbar, green, size = size.tiny)
+plotshape(strong_sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Strong Sell', shape.circle, location.abovebar, strong_red, size = size.small)
+plotshape(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Sell', shape.circle, location.abovebar, red, size = size.tiny)
 
 // Alert Conditions (must be at global scope)
 alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, 'High Volatility Detected', 'Market entered high volatility state')
