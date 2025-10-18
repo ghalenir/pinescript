@@ -120,15 +120,12 @@ pine_supertrend(factor, atr) =>
     
     if na(atr[1])
         _direction := 1
-        _direction
     else if prevSuperTrend == prevUpperBand
-        _direction := close > upperBand ? -1 : 1
-        _direction
+        _direction := close > upperBand ? 1 : -1  // CORRECT: Above upperBand = BULLISH (1)
     else
-        _direction := close < lowerBand ? 1 : -1
-        _direction
+        _direction := close < lowerBand ? -1 : 1  // CORRECT: Below lowerBand = BEARISH (-1)
     
-    superTrend := _direction == -1 ? lowerBand : upperBand
+    superTrend := _direction == 1 ? lowerBand : upperBand  // CORRECT: BULLISH (1) uses lowerBand, BEARISH (-1) uses upperBand
     [superTrend, _direction]
 
 // ============================================================================
@@ -215,20 +212,26 @@ perform_kmeans_clustering(volatility, training_data_period, highvol, midvol, low
 // SIGNAL DETECTION FUNCTIONS
 // ============================================================================
 detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_momentum, trend_bullish, strong_bearish_momentum, trend_bearish) =>
-    // Clean signal detection - SuperTrend direction change
-    longSignal = dir == 1 and dir[1] == -1
-    shortSignal = dir == -1 and dir[1] == 1
+    // SuperTrend Direction Logic:
+    // dir == 1: BULLISH trend (price above SuperTrend, using lowerBand as support)
+    // dir == -1: BEARISH trend (price below SuperTrend, using upperBand as resistance)
     
-    // Strong Buy conditions - only when longSignal is true
+    // Signal Detection:
+    // longSignal: Price breaks from BEARISH to BULLISH (dir changes from -1 to 1) = BUY signal
+    // shortSignal: Price breaks from BULLISH to BEARISH (dir changes from 1 to -1) = SELL signal
+    longSignal = dir == 1 and dir[1] == -1  // Bullish breakout = BUY
+    shortSignal = dir == -1 and dir[1] == 1  // Bearish breakdown = SELL
+    
+    // Strong Buy conditions - SuperTrend bullish breakout + bullish confirmations
     strong_buy_condition = longSignal and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
     
-    // Regular Buy conditions - when longSignal is true but not strong
+    // Regular Buy conditions - SuperTrend bullish breakout but not meeting strong conditions
     buy_condition = longSignal and not strong_buy_condition
     
-    // Strong Sell conditions - only when shortSignal is true
+    // Strong Sell conditions - SuperTrend bearish breakdown + bearish confirmations
     strong_sell_condition = shortSignal and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30 or rsi > 60 and macd_histogram < 0)
     
-    // Regular Sell conditions - when shortSignal is true but not strong
+    // Regular Sell conditions - SuperTrend bearish breakdown but not meeting strong conditions
     sell_condition = shortSignal and not strong_sell_condition
     
     [strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal]
