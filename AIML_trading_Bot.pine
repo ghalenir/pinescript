@@ -1,109 +1,21 @@
-//@version=6
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © AlgoAlpha
+
+//@version=5
 indicator('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
+
 import TradingView/ta/7
+atr_len = input.int(10, "ATR Length", group = "SuperTrend Settings")
+fact = input.float(3, "SuperTrend Factor", group = "SuperTrend Settings")
+training_data_period = input.int(100, "Training Data Length", group = "K-Means Settings")
+highvol = input.float(0.75, "Initial High volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'high volatility' area is, a value of 0.75 will take the 75th percentile of the range of ATR values over the training data period")
+midvol = input.float(0.5, "Initial Medium volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'medium volatility' area is, a value of 0.5 will take the 50th percentile of the range of ATR values over the training data period")
+lowvol = input.float(0.25, "Initial Low volatility Percentile Guess", maxval = 1, group = "K-Means Settings", tooltip = "The initial guess of where the potential 'low volatility' area is, a value of 0.25 will take the 25th percentile of the range of ATR values over the training data period")
+t1 = input.int(70, "Transparency 1", maxval = 100, minval = 0, group = "Appearance")
+t2 = input.int(95, "Transparency 2", maxval = 100, minval = 0, group = "Appearance")
+green = input.color(#00ffbb, "Bullish Color", group = "Appearance")
+red = input.color(#ff1100, "Bearish Color", group = "Appearance")
 
-// ============================================================================
-// INPUT PARAMETERS (must be at top of script)
-// ============================================================================
-// SuperTrend Settings
-atr_len = input.int(10, 'ATR Length', group = 'SuperTrend Settings')
-fact = input.float(3, 'SuperTrend Factor', group = 'SuperTrend Settings')
-
-// K-Means Settings
-training_data_period = input.int(100, 'Training Data Length', group = 'K-Means Settings')
-highvol = input.float(0.75, 'Initial High volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'high volatility\' area is, a value of 0.75 will take the 75th percentile of the range of ATR values over the training data period')
-midvol = input.float(0.5, 'Initial Medium volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'medium volatility\' area is, a value of 0.5 will take the 50th percentile of the range of ATR values over the training data period')
-lowvol = input.float(0.25, 'Initial Low volatility Percentile Guess', maxval = 1, group = 'K-Means Settings', tooltip = 'The initial guess of where the potential \'low volatility\' area is, a value of 0.25 will take the 25th percentile of the range of ATR values over the training data period')
-
-// Appearance Settings
-t1 = input.int(70, 'Transparency 1', maxval = 100, minval = 0, group = 'Appearance')
-t2 = input.int(95, 'Transparency 2', maxval = 100, minval = 0, group = 'Appearance')
-green = input.color(#00cc66, 'Bullish Color', group = 'Appearance')
-red = input.color(#cc3333, 'Bearish Color', group = 'Appearance')
-strong_green = input.color(#00ff00, 'Strong Bullish Color', group = 'Appearance')
-strong_red = input.color(#ff0000, 'Strong Bearish Color', group = 'Appearance')
-
-// Signal Strength Settings
-volume_threshold = input.float(1.5, 'Volume Threshold Multiplier', minval = 1.0, group = 'Signal Strength')
-rsi_period = input.int(14, 'RSI Period', group = 'Signal Strength')
-momentum_period = input.int(14, 'Momentum Period', group = 'Signal Strength')
-
-// Webhook Settings
-webhook_url = input.string('https://signals.signum.money/trading', 'Webhook URL', group = 'Webhook Settings')
-bot_id = input.string('4vH63Kjr', 'Bot ID', group = 'Webhook Settings')
-order_size = input.string('100%', 'Order Size', group = 'Webhook Settings')
-enable_webhooks = input.bool(true, 'Enable Webhook Alerts', group = 'Webhook Settings')
-
-// Debug Settings
-show_debug_table = input.bool(true, 'Show Debug Table', group = 'Debug Settings')
-show_debug_labels = input.bool(true, 'Show Debug Labels', group = 'Debug Settings')
-debug_rsi = input.bool(true, 'Debug RSI', group = 'Debug Settings')
-debug_volume = input.bool(true, 'Debug Volume', group = 'Debug Settings')
-debug_macd = input.bool(true, 'Debug MACD', group = 'Debug Settings')
-debug_momentum = input.bool(true, 'Debug Momentum', group = 'Debug Settings')
-debug_alerts = input.bool(true, 'Debug Alerts', group = 'Debug Settings')
-test_alert = input.bool(false, 'Test Alert (Every 10 bars)', group = 'Debug Settings')
-
-// ============================================================================
-// TECHNICAL INDICATORS (declared early for function parameter access)
-// ============================================================================
-// Volume Analysis
-volume_avg = ta.sma(volume, 20)
-high_volume = volume > volume_avg * volume_threshold
-
-// RSI and MACD
-rsi = ta.rsi(close, rsi_period)
-macd_line = ta.ema(close, 12) - ta.ema(close, 26)
-macd_signal = ta.ema(macd_line, 9)
-macd_histogram = macd_line - macd_signal
-
-// Moving Averages
-sma_10 = ta.sma(close, 10)
-sma_20 = ta.sma(close, 20)
-sma_50 = ta.sma(close, 50)
-sma_100 = ta.sma(close, 100)
-sma_200 = ta.sma(close, 200)
-ma_10 = ta.sma(close, 10)
-ma_20 = ta.sma(close, 20)
-ma_50 = ta.sma(close, 50)
-ema_10 = ta.ema(close, 10)
-ema_20 = ta.ema(close, 20)
-ema_50 = ta.ema(close, 50)
-ema_100 = ta.ema(close, 100)
-ema_200 = ta.ema(close, 200)
-
-// Bollinger Bands
-bb_upper = ta.sma(close, 20) + (ta.stdev(close, 20) * 2)
-bb_lower = ta.sma(close, 20) - (ta.stdev(close, 20) * 2)
-bb_middle = ta.sma(close, 20)
-
-// Trend Analysis
-trend_bullish = ema_20 > ema_50
-trend_bearish = ema_20 < ema_50
-
-// Price Momentum
-price_momentum = close - close[momentum_period]
-strong_bullish_momentum = price_momentum > 0 and close > open
-strong_bearish_momentum = price_momentum < 0 and close < open
-
-// Bollinger Bands Conditions
-price_vs_bb_upper = close > bb_upper
-price_vs_bb_lower = close < bb_lower
-bb_squeeze = (bb_upper - bb_lower) / bb_middle < 0.1
-bb_breakout_bullish = close > bb_upper and close[1] <= bb_upper[1]
-bb_breakout_bearish = close < bb_lower and close[1] >= bb_lower[1]
-bb_squeeze_condition = bb_squeeze
-atr_7 = ta.atr(7)
-
-// ============================================================================
-// INPUT CONFIGURATION FUNCTION (removed - inputs now declared at top)
-// ============================================================================
-// Note: All input parameters are now declared at the top of the script
-// for proper Pine Script v6 compliance
-
-// ============================================================================
-// SUPERTREND CALCULATION FUNCTION
-// ============================================================================
 pine_supertrend(factor, atr) =>
     src = hl2
     upperBand = src + factor * atr
@@ -113,412 +25,143 @@ pine_supertrend(factor, atr) =>
 
     lowerBand := lowerBand > prevLowerBand or close[1] < prevLowerBand ? lowerBand : prevLowerBand
     upperBand := upperBand < prevUpperBand or close[1] > prevUpperBand ? upperBand : prevUpperBand
-    
     int _direction = na
     float superTrend = na
     prevSuperTrend = superTrend[1]
-    
     if na(atr[1])
         _direction := 1
     else if prevSuperTrend == prevUpperBand
-        _direction := close > upperBand ? 1 : -1  // CORRECT: Above upperBand = BULLISH (1)
+        _direction := close > upperBand ? -1 : 1
     else
-        _direction := close < lowerBand ? -1 : 1  // CORRECT: Below lowerBand = BEARISH (-1)
-    
-    superTrend := _direction == 1 ? lowerBand : upperBand  // CORRECT: BULLISH (1) uses lowerBand, BEARISH (-1) uses upperBand
+        _direction := close < lowerBand ? 1 : -1
+    superTrend := _direction == -1 ? lowerBand : upperBand
     [superTrend, _direction]
 
-// ============================================================================
-// K-MEANS CLUSTERING FUNCTION
-// ============================================================================
-perform_kmeans_clustering(volatility, training_data_period, highvol, midvol, lowvol) =>
-    upper = ta.highest(volatility, training_data_period)
-    lower = ta.lowest(volatility, training_data_period)
-    
-    high_volatility = lower + (upper - lower) * highvol
-    medium_volatility = lower + (upper - lower) * midvol
-    low_volatility = lower + (upper - lower) * lowvol
-    
-    iterations = 0
-    size_a = 0
-    size_b = 0
-    size_c = 0
-    
-    hv = array.new_float()
-    mv = array.new_float()
-    lv = array.new_float()
-    amean = array.new_float(1, high_volatility)
-    bmean = array.new_float(1, medium_volatility)
-    cmean = array.new_float(1, low_volatility)
-    
-    if nz(volatility) > 0 and bar_index >= training_data_period - 1
-        while (amean.size() == 1 ? true : amean.first() != amean.get(1)) or (bmean.size() == 1 ? true : bmean.first() != bmean.get(1)) or (cmean.size() == 1 ? true : cmean.first() != cmean.get(1))
-            hv.clear()
-            mv.clear()
-            lv.clear()
-            
-            for i = training_data_period - 1 to 0 by 1
-                _1 = math.abs(volatility[i] - amean.first())
-                _2 = math.abs(volatility[i] - bmean.first())
-                _3 = math.abs(volatility[i] - cmean.first())
-                
-                if _1 < _2 and _1 < _3
-                    hv.unshift(volatility[i])
-                if _2 < _1 and _2 < _3
-                    mv.unshift(volatility[i])
-                if _3 < _1 and _3 < _2
-                    lv.unshift(volatility[i])
-            
-            amean.unshift(hv.avg())
-            bmean.unshift(mv.avg())
-            cmean.unshift(lv.avg())
-            size_a := hv.size()
-            size_b := mv.size()
-            size_c := lv.size()
-            iterations := iterations + 1
-            iterations
-    
-    hv_new = amean.first()
-    mv_new = bmean.first()
-    lv_new = cmean.first()
-    
-    vdist_a = math.abs(volatility - hv_new)
-    vdist_b = math.abs(volatility - mv_new)
-    vdist_c = math.abs(volatility - lv_new)
-    
-    distances = array.new_float()
-    centroids = array.new_float()
-    
-    distances.push(vdist_a)
-    distances.push(vdist_b)
-    distances.push(vdist_c)
-    
-    centroids.push(hv_new)
-    centroids.push(mv_new)
-    centroids.push(lv_new)
-    
-    cluster = distances.indexof(distances.min())
-    assigned_centroid = cluster == -1 ? na : centroids.get(cluster)
-    
-    [cluster, assigned_centroid, hv_new, mv_new, lv_new, size_a, size_b, size_c]
-
-// ============================================================================
-// TECHNICAL INDICATORS FUNCTION (removed - calculations moved to global scope)
-// ============================================================================
-// Note: All technical indicator calculations are now performed at global scope
-// for proper Pine Script v6 compatibility
-
-// ============================================================================
-// SIGNAL DETECTION FUNCTIONS
-// ============================================================================
-detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_momentum, trend_bullish, strong_bearish_momentum, trend_bearish) =>
-    // SuperTrend Direction Logic:
-    // dir == 1: BULLISH trend (price above SuperTrend, using lowerBand as support)
-    // dir == -1: BEARISH trend (price below SuperTrend, using upperBand as resistance)
-    
-    // Signal Detection:
-    // longSignal: Price breaks from BEARISH to BULLISH (dir changes from -1 to 1) = BUY signal
-    // shortSignal: Price breaks from BULLISH to BEARISH (dir changes from 1 to -1) = SELL signal
-    longSignal = dir == 1 and dir[1] == -1  // Bullish breakout = BUY
-    shortSignal = dir == -1 and dir[1] == 1  // Bearish breakdown = SELL
-    
-    // Strong Buy conditions - SuperTrend bullish breakout + bullish confirmations
-    strong_buy_condition = longSignal and (high_volume and rsi < 70 and macd_histogram > 0 or cluster == 2 and strong_bullish_momentum or trend_bullish and rsi > 50 and rsi < 70)
-    
-    // Regular Buy conditions - SuperTrend bullish breakout but not meeting strong conditions
-    buy_condition = longSignal and not strong_buy_condition
-    
-    // Strong Sell conditions - SuperTrend bearish breakdown + bearish confirmations
-    strong_sell_condition = shortSignal and (high_volume and rsi > 30 and macd_histogram < 0 or cluster == 0 and strong_bearish_momentum or trend_bearish and rsi < 50 and rsi > 30 or rsi > 60 and macd_histogram < 0)
-    
-    // Regular Sell conditions - SuperTrend bearish breakdown but not meeting strong conditions
-    sell_condition = shortSignal and not strong_sell_condition
-    
-    [strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal]
-
-// ============================================================================
-// WEBHOOK PAYLOAD GENERATION FUNCTIONS
-// ============================================================================
-generate_webhook_payload(action, signal_strength, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum) =>
-    base_payload = '{"action": "' + action + '", "signal_strength": "' + signal_strength + '", "ticker": "{{ticker}}", "order_size": "' + order_size + '", "position_size": "100%", "schema": "2", "timestamp": "{{time}}", "bot_id": "' + bot_id + '", "price_data": {"close": ' + str.tostring(close) + ', "open": ' + str.tostring(open) + ', "high": ' + str.tostring(high) + ', "low": ' + str.tostring(low) + ', "volume": ' + str.tostring(volume) + '}, "technical_indicators": {"rsi": ' + str.format('{0,number,#.##}', rsi) + ', "macd_line": ' + str.format('{0,number,#.##}', macd_line) + ', "macd_signal": ' + str.format('{0,number,#.##}', macd_signal) + ', "macd_histogram": ' + str.format('{0,number,#.##}', macd_histogram) + ', "sma_10": ' + str.format('{0,number,#.##}', sma_10) + ', "sma_20": ' + str.format('{0,number,#.##}', sma_20) + ', "sma_50": ' + str.format('{0,number,#.##}', sma_50) + ', "sma_100": ' + str.format('{0,number,#.##}', sma_100) + ', "sma_200": ' + str.format('{0,number,#.##}', sma_200) + ', "ma_10": ' + str.format('{0,number,#.##}', ma_10) + ', "ma_20": ' + str.format('{0,number,#.##}', ma_20) + ', "ma_50": ' + str.format('{0,number,#.##}', ma_50) + ', "ema_10": ' + str.format('{0,number,#.##}', ema_10) + ', "ema_20": ' + str.format('{0,number,#.##}', ema_20) + ', "ema_50": ' + str.format('{0,number,#.##}', ema_50) + ', "ema_100": ' + str.format('{0,number,#.##}', ema_100) + ', "ema_200": ' + str.format('{0,number,#.##}', ema_200) + ', "atr": ' + str.format('{0,number,#.##}', volatility) + ', "atr_7": ' + str.format('{0,number,#.##}', atr_7)
-    
-    // Add Bollinger Bands if available
-    bb_section = ', "bb_upper": ' + str.format('{0,number,#.##}', bb_upper) + ', "bb_lower": ' + str.format('{0,number,#.##}', bb_lower) + ', "bb_middle": ' + str.format('{0,number,#.##}', bb_middle)
-    
-    market_conditions = '}, "market_conditions": {"volatility_cluster": ' + str.tostring(cluster) + ', "cluster_name": "' + (cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW') + '", "trend_direction": "' + (trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL') + '", "volume_status": "' + (high_volume ? 'HIGH' : 'NORMAL') + '", "price_momentum": ' + str.format('{0,number,#.##}', price_momentum) + ', "supertrend_direction": ' + str.tostring(dir) + ', "supertrend_value": ' + str.format('{0,number,#.##}', ST) + ', "price_vs_bb_upper": ' + str.tostring(price_vs_bb_upper) + ', "price_vs_bb_lower": ' + str.tostring(price_vs_bb_lower) + ', "bb_squeeze": ' + str.tostring(bb_squeeze)
-    
-    signal_conditions = '}, "signal_conditions": {"volume_confirmation": ' + str.tostring(high_volume) + ', "rsi_oversold": ' + str.tostring(rsi < 30) + ', "rsi_overbought": ' + str.tostring(rsi > 70) + ', "macd_bullish": ' + str.tostring(macd_histogram > 0) + ', "macd_bearish": ' + str.tostring(macd_histogram < 0) + ', "trend_alignment": ' + str.tostring(trend_bullish) + ', "momentum_bullish": ' + str.tostring(strong_bullish_momentum) + ', "momentum_bearish": ' + str.tostring(strong_bearish_momentum) + ', "bb_breakout_bullish": ' + str.tostring(bb_breakout_bullish) + ', "bb_breakout_bearish": ' + str.tostring(bb_breakout_bearish) + ', "bb_squeeze_condition": ' + str.tostring(bb_squeeze_condition) + '}}'
-    
-    base_payload + bb_section + market_conditions + signal_conditions
-
-// ============================================================================
-// VISUALIZATION FUNCTIONS
-// ============================================================================
-// Note: plot() functions must be at global scope, not inside functions
-
-create_volatility_label(bar_index, dir, ST, atr_7, cluster, red, green) =>
-    label.new(bar_index, dir > 0 ? ST + atr_7 : ST - atr_7, text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
-
-create_signal_labels(longSignal, shortSignal, strong_buy_condition, strong_sell_condition, bar_index, low, high) =>
-    if (longSignal and barstate.isconfirmed)
-        signal_text = strong_buy_condition ? "STRONG BUY" : "BUY"
-        signal_color = strong_buy_condition ? strong_green : green
-        label.new(bar_index, low, signal_text, style=label.style_label_up, color=signal_color, textcolor=color.white, size=size.normal)
-    
-    if (shortSignal and barstate.isconfirmed)
-        signal_text = strong_sell_condition ? "STRONG SELL" : "SELL"
-        signal_color = strong_sell_condition ? strong_red : red
-        label.new(bar_index, high, signal_text, style=label.style_label_down, color=signal_color, textcolor=color.white, size=size.normal)
-
-// ============================================================================
-// DEBUG FUNCTIONS
-// ============================================================================
-create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal, bar_index, high, atr_7) =>
-    if show_debug_labels and barstate.isconfirmed
-        debug_text = ''
-        if debug_rsi
-            debug_text := debug_text + 'RSI: ' + str.format('{0,number,#.##}', rsi) + '\n'
-        if debug_volume
-            debug_text := debug_text + 'Vol: ' + (high_volume ? 'HIGH' : 'NORM') + '\n'
-        if debug_macd
-            debug_text := debug_text + 'MACD: ' + str.format('{0,number,#.##}', macd_histogram) + '\n'
-        if debug_momentum
-            debug_text := debug_text + 'Mom: ' + str.format('{0,number,#.##}', price_momentum) + '\n'
-        debug_text := debug_text + 'Cluster: ' + str.tostring(cluster) + '\n'
-        debug_text := debug_text + 'Trend: ' + (trend_bullish ? 'BULL' : trend_bearish ? 'BEAR' : 'NEUT') + '\n'
-        
-        // Add signal analysis
-        if shortSignal
-            debug_text := debug_text + 'SHORT SIGNAL!\n'
-            debug_text := debug_text + 'Strong Sell Check:\n'
-            debug_text := debug_text + 'Vol+RSI+MACD: ' + str.tostring(high_volume and rsi > 30 and macd_histogram < 0) + '\n'
-            debug_text := debug_text + 'Cluster+Momentum: ' + str.tostring(cluster == 0 and strong_bearish_momentum) + '\n'
-            debug_text := debug_text + 'Trend+RSI: ' + str.tostring(trend_bearish and rsi < 50 and rsi > 30) + '\n'
-            debug_text := debug_text + 'RSI+MACD: ' + str.tostring(rsi > 60 and macd_histogram < 0) + '\n'
-        
-        if strong_buy_condition
-            debug_text := debug_text + 'STRONG BUY!'
-        else if buy_condition
-            debug_text := debug_text + 'BUY'
-        else if strong_sell_condition
-            debug_text := debug_text + 'STRONG SELL!'
-        else if sell_condition
-            debug_text := debug_text + 'SELL'
-        else
-            debug_text := debug_text + 'NO SIGNAL'
-        
-        label.new(bar_index, high + atr_7, text = debug_text, style = label.style_label_down, color = color.new(color.blue, 80), textcolor = color.white, size = size.small)
-
-create_debug_tables(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, rsi, macd_histogram, high_volume, price_momentum, trend_bullish, trend_bearish, cluster, dir, ema_20, ema_50, volume, volume_avg, volume_threshold, atr_7, debug_alerts, enable_webhooks, strong_green, green, strong_red, red) =>
-    if show_debug_table
-        // Signal Status Table
-        var signal_status_table = table.new(position = position.top_center, columns = 1, rows = 2, bgcolor = color.new(color.black, 30), border_width = 2, border_color = color.white, frame_color = color.white, frame_width = 2)
-        
-        current_signal = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
-        signal_color = strong_buy_condition ? strong_green : buy_condition ? green : strong_sell_condition ? strong_red : sell_condition ? red : color.gray
-        
-        table.cell(signal_status_table, 0, 0, 'CURRENT SIGNAL', text_color = color.yellow, text_size = size.normal)
-        table.cell(signal_status_table, 0, 1, current_signal, text_color = signal_color, text_size = size.large)
-        
-        // Debug Info Table
-        var debug_table = table.new(position = position.top_left, columns = 2, rows = 15, bgcolor = color.new(color.black, 20), border_width = 1, border_color = color.white, frame_color = color.white, frame_width = 1)
-        
-        table.cell(debug_table, 0, 0, 'DEBUG INFO', text_color = color.yellow, text_size = size.normal)
-        table.cell(debug_table, 1, 0, 'VALUE', text_color = color.yellow, text_size = size.normal)
-        
-        table.cell(debug_table, 0, 1, 'Current Signal', text_color = color.white)
-        signal_text = strong_buy_condition ? 'STRONG BUY' : buy_condition ? 'BUY' : strong_sell_condition ? 'STRONG SELL' : sell_condition ? 'SELL' : 'NO SIGNAL'
-        table.cell(debug_table, 1, 1, signal_text, text_color = signal_color)
-        
-        table.cell(debug_table, 0, 2, 'RSI', text_color = color.white)
-        table.cell(debug_table, 1, 2, str.format('{0,number,#.##}', rsi), text_color = rsi > 70 ? color.red : rsi < 30 ? color.green : color.white)
-        
-        table.cell(debug_table, 0, 3, 'MACD Histogram', text_color = color.white)
-        table.cell(debug_table, 1, 3, str.format('{0,number,#.##}', macd_histogram), text_color = macd_histogram > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 4, 'Volume Status', text_color = color.white)
-        table.cell(debug_table, 1, 4, high_volume ? 'HIGH' : 'NORMAL', text_color = high_volume ? color.yellow : color.white)
-        
-        table.cell(debug_table, 0, 5, 'Price Momentum', text_color = color.white)
-        table.cell(debug_table, 1, 5, str.format('{0,number,#.##}', price_momentum), text_color = price_momentum > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 6, 'Trend Direction', text_color = color.white)
-        trend_text = trend_bullish ? 'BULLISH' : trend_bearish ? 'BEARISH' : 'NEUTRAL'
-        trend_color = trend_bullish ? color.green : trend_bearish ? color.red : color.gray
-        table.cell(debug_table, 1, 6, trend_text, text_color = trend_color)
-        
-        table.cell(debug_table, 0, 7, 'Volatility Cluster', text_color = color.white)
-        cluster_text = cluster == 0 ? 'HIGH' : cluster == 1 ? 'MEDIUM' : 'LOW'
-        cluster_color = cluster == 0 ? color.red : cluster == 1 ? color.yellow : color.green
-        table.cell(debug_table, 1, 7, cluster_text, text_color = cluster_color)
-        
-        table.cell(debug_table, 0, 8, 'SuperTrend Dir', text_color = color.white)
-        table.cell(debug_table, 1, 8, dir > 0 ? 'BULLISH' : 'BEARISH', text_color = dir > 0 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 9, 'EMA 20 vs 50', text_color = color.white)
-        table.cell(debug_table, 1, 9, ema_20 > ema_50 ? 'EMA20 > EMA50' : 'EMA20 < EMA50', text_color = ema_20 > ema_50 ? color.green : color.red)
-        
-        table.cell(debug_table, 0, 10, 'Volume Ratio', text_color = color.white)
-        volume_ratio = volume / volume_avg
-        table.cell(debug_table, 1, 10, str.format('{0,number,#.##}x', volume_ratio), text_color = volume_ratio > volume_threshold ? color.yellow : color.white)
-        
-        table.cell(debug_table, 0, 11, 'ATR (7)', text_color = color.white)
-        table.cell(debug_table, 1, 11, str.format('{0,number,#.##}', atr_7), text_color = color.white)
-        
-        if debug_alerts
-            table.cell(debug_table, 0, 12, 'Webhooks Enabled', text_color = color.white)
-            table.cell(debug_table, 1, 12, enable_webhooks ? 'YES' : 'NO', text_color = enable_webhooks ? color.green : color.red)
-            
-            table.cell(debug_table, 0, 13, 'Bar Confirmed', text_color = color.white)
-            table.cell(debug_table, 1, 13, barstate.isconfirmed ? 'YES' : 'NO', text_color = barstate.isconfirmed ? color.green : color.red)
-            
-            table.cell(debug_table, 0, 14, 'Alert Ready', text_color = color.white)
-            alert_ready = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
-            table.cell(debug_table, 1, 14, alert_ready ? 'YES' : 'NO', text_color = alert_ready ? color.green : color.red)
-
-create_cluster_data_table(cluster, hv_new, mv_new, lv_new, size_c, size_b, size_a, volatility) =>
-    if barstate.islast
-        var data_table = table.new(position = position.top_right, columns = 4, rows = 4, bgcolor = chart.bg_color, border_width = 1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
-        table.cell(data_table, text_halign = text.align_center, column = 0, row = 0, text = 'Cluster Number (Volatility Level)', text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 1, row = 0, text = 'Cluster Centroid (ATR)', text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 2, row = 0, text = 'Cluster Size (No. of Data Points in Each Cluster)', text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 3, row = 0, text = 'Current Volatility', text_color = chart.fg_color)
-
-        table.cell(data_table, text_halign = text.align_center, column = 0, row = 1, text = '3 (High)', text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 0, row = 2, text = '2 (Medium)', text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 0, row = 3, text = '1 (Low)', text_color = chart.fg_color)
-
-        table.cell(data_table, text_halign = text.align_center, column = 1, row = 1, text = str.format('{0,number,#.##}', hv_new), text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 1, row = 2, text = str.format('{0,number,#.##}', mv_new), text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 1, row = 3, text = str.format('{0,number,#.##}', lv_new), text_color = chart.fg_color)
-
-        table.cell(data_table, text_halign = text.align_center, column = 2, row = 1, text = str.format('{0,number,#.##}', size_c), text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 2, row = 2, text = str.format('{0,number,#.##}', size_b), text_color = chart.fg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 2, row = 3, text = str.format('{0,number,#.##}', size_a), text_color = chart.fg_color)
-
-        table.cell(data_table, text_halign = text.align_center, column = 3, row = 1, text = 'HIGH ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 3, row = 2, text = 'MEDIUM ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
-        table.cell(data_table, text_halign = text.align_center, column = 3, row = 3, text = 'LOW ' + '(ATR: ' + str.format('{0,number,#.##}', volatility) + ')', text_color = chart.bg_color)
-
-        if cluster == 0
-            data_table.cell_set_bgcolor(3, 1, chart.fg_color)
-        else
-            data_table.cell_set_bgcolor(3, 1, chart.bg_color)
-
-        if cluster == 1
-            data_table.cell_set_bgcolor(3, 2, chart.fg_color)
-        else
-            data_table.cell_set_bgcolor(3, 2, chart.bg_color)
-
-        if cluster == 2
-            data_table.cell_set_bgcolor(3, 3, chart.fg_color)
-        else
-            data_table.cell_set_bgcolor(3, 3, chart.bg_color)
-
-// ============================================================================
-// ALERT FUNCTIONS
-// ============================================================================
-// Note: alertcondition() functions must be at global scope, not inside functions
-
-send_webhook_alerts(strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, enable_webhooks, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum) =>
-    // Strong Buy Alert
-    if strong_buy_condition and barstate.isconfirmed and enable_webhooks
-        webhook_payload = generate_webhook_payload("buy", "strong", "100%", "4vH63Kjr", rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-        alert(webhook_payload, alert.freq_once_per_bar)
-    
-    // Regular Buy Alert
-    if buy_condition and barstate.isconfirmed and enable_webhooks
-        webhook_payload = generate_webhook_payload("buy", "regular", order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-        alert(webhook_payload, alert.freq_once_per_bar)
-    
-    // Strong Sell Alert
-    if strong_sell_condition and barstate.isconfirmed and enable_webhooks
-        webhook_payload = generate_webhook_payload("sell", "strong", "100%", "4vH63Kjr", rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-        alert(webhook_payload, alert.freq_once_per_bar)
-    
-    // Regular Sell Alert
-    if sell_condition and barstate.isconfirmed and enable_webhooks
-        webhook_payload = generate_webhook_payload("sell", "regular", order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-        alert(webhook_payload, alert.freq_once_per_bar)
-
-send_test_alert(test_alert, bar_index, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum, debug_alerts) =>
-    if test_alert and barstate.isconfirmed and bar_index % 10 == 0
-        webhook_payload = generate_webhook_payload("buy", "test", order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-        alert(webhook_payload, alert.freq_once_per_bar)
-        if debug_alerts
-            label.new(bar_index, high + atr_7 * 3, text = 'TEST ALERT SENT - RSI: ' + str.format('{0,number,#.##}', rsi), style = label.style_label_down, color = color.new(color.blue, 20), textcolor = color.white, size = size.normal)
-
-create_alert_status_table(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, enable_webhooks) =>
-    if show_debug_table
-        var alert_status_table = table.new(position = position.top_right, columns = 1, rows = 3, bgcolor = color.new(color.black, 30), border_width = 2, border_color = color.white, frame_color = color.white, frame_width = 2)
-        
-        alert_fired = (strong_buy_condition or buy_condition or strong_sell_condition or sell_condition) and barstate.isconfirmed and enable_webhooks
-        alert_status = alert_fired ? 'ALERT SENT!' : enable_webhooks ? 'READY' : 'DISABLED'
-        alert_status_color = alert_fired ? color.yellow : enable_webhooks ? color.green : color.red
-        
-        table.cell(alert_status_table, 0, 0, 'ALERT STATUS', text_color = color.yellow, text_size = size.normal)
-        table.cell(alert_status_table, 0, 1, alert_status, text_color = alert_status_color, text_size = size.large)
-        table.cell(alert_status_table, 0, 2, 'Webhooks: ' + (enable_webhooks ? 'ON' : 'OFF'), text_color = enable_webhooks ? color.green : color.red, text_size = size.small)
-
-// ============================================================================
-// MAIN EXECUTION FUNCTION
-// ============================================================================
-// Note: Main function removed since all operations are now at global scope
-// This maintains the function-based architecture while ensuring proper variable access
-
-// ============================================================================
-// GLOBAL PLOTTING (must be at global scope)
-// ============================================================================
-// Input parameters are now declared at the top of the file
-
-// Calculate volatility and perform K-means clustering
 volatility = ta.atr(atr_len)
-[cluster, assigned_centroid, hv_new, mv_new, lv_new, size_a, size_b, size_c] = perform_kmeans_clustering(volatility, training_data_period, highvol, midvol, lowvol)
 
-// Calculate SuperTrend
+upper = ta.highest(volatility, training_data_period)
+lower = ta.lowest(volatility, training_data_period)
+
+high_volatility = lower + (upper-lower) * highvol
+medium_volatility = lower + (upper-lower) * midvol
+low_volatility = lower + (upper-lower) * lowvol
+
+iterations = 0
+
+size_a = 0
+size_b = 0
+size_c = 0
+
+hv = array.new_float()
+mv = array.new_float()
+lv = array.new_float()
+amean = array.new_float(1,high_volatility)
+bmean = array.new_float(1,medium_volatility)
+cmean = array.new_float(1,low_volatility)
+
+if nz(volatility) > 0 and bar_index >= training_data_period-1
+
+    while ((amean.size() == 1 ? true : (amean.first() != amean.get(1))) or (bmean.size() == 1 ? true : (bmean.first() != bmean.get(1))) or (cmean.size() == 1 ? true : (cmean.first() != cmean.get(1))))
+        hv.clear()
+        mv.clear()
+        lv.clear()
+        for i = training_data_period-1 to 0
+            _1 = math.abs(volatility[i] - amean.first())
+            _2 = math.abs(volatility[i] - bmean.first())
+            _3 = math.abs(volatility[i] - cmean.first())
+            if _1 < _2 and _1 < _3
+                hv.unshift(volatility[i])
+
+            if _2 < _1 and _2 < _3
+                mv.unshift(volatility[i])
+
+            if _3 < _1 and _3 < _2
+                lv.unshift(volatility[i])
+        
+        amean.unshift(hv.avg())
+        bmean.unshift(mv.avg())
+        cmean.unshift(lv.avg())
+        size_a := hv.size()
+        size_b := mv.size()
+        size_c := lv.size()
+        iterations := iterations + 1
+
+hv_new = amean.first()
+mv_new = bmean.first()
+lv_new = cmean.first()
+vdist_a = math.abs(volatility - hv_new)
+vdist_b = math.abs(volatility - mv_new)
+vdist_c = math.abs(volatility - lv_new)
+
+distances = array.new_float()
+centroids = array.new_float()
+
+distances.push(vdist_a)
+distances.push(vdist_b)
+distances.push(vdist_c)
+
+centroids.push(hv_new)
+centroids.push(mv_new)
+centroids.push(lv_new)
+
+cluster = distances.indexof(distances.min()) // 0 for high, 1 for medium, 2 for low
+assigned_centroid = cluster == -1 ? na : centroids.get(cluster)
+
 [ST, dir] = pine_supertrend(fact, assigned_centroid)
+upTrend = plot(close > ST ? ST : na, color = color.new(green, t1), style = plot.style_linebr) //, force_overlay = true
+downTrend = plot(close < ST ? ST : na, color = color.new(red, t1), style = plot.style_linebr, force_overlay = false) //, force_overlay = true
+bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, "Body Middle",display = display.none)
 
-// Technical indicators are now declared at the top of the script
-
-// Detect signals
-[strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal] = detect_signals(dir, high_volume, rsi, macd_histogram, cluster, strong_bullish_momentum, trend_bullish, strong_bearish_momentum, trend_bearish)
-
-// Execute all function-based operations at global scope
-create_volatility_label(bar_index, dir, ST, atr_7, cluster, red, green)
-create_signal_labels(longSignal, shortSignal, strong_buy_condition, strong_sell_condition, bar_index, low, high)
-// create_debug_labels(show_debug_labels, debug_rsi, debug_volume, debug_macd, debug_momentum, debug_alerts, rsi, high_volume, macd_histogram, price_momentum, cluster, trend_bullish, trend_bearish, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, longSignal, shortSignal, bar_index, high, atr_7)
-// create_debug_tables(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, rsi, macd_histogram, high_volume, price_momentum, trend_bullish, trend_bearish, cluster, dir, ema_20, ema_50, volume, volume_avg, volume_threshold, atr_7, debug_alerts, enable_webhooks, strong_green, green, strong_red, red)
-create_cluster_data_table(cluster, hv_new, mv_new, lv_new, size_c, size_b, size_a, volatility)
-send_webhook_alerts(strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, enable_webhooks, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum)
-send_test_alert(test_alert, bar_index, order_size, bot_id, rsi, macd_line, macd_signal, macd_histogram, sma_10, sma_20, sma_50, sma_100, sma_200, ma_10, ma_20, ma_50, ema_10, ema_20, ema_50, ema_100, ema_200, volatility, atr_7, cluster, trend_bullish, trend_bearish, high_volume, price_momentum, dir, ST, price_vs_bb_upper, price_vs_bb_lower, bb_squeeze, bb_upper, bb_lower, bb_middle, bb_breakout_bullish, bb_breakout_bearish, bb_squeeze_condition, strong_bullish_momentum, strong_bearish_momentum, debug_alerts)
-create_alert_status_table(show_debug_table, strong_buy_condition, buy_condition, strong_sell_condition, sell_condition, enable_webhooks)
-
-// SuperTrend Plots
-upTrend = plot(close > ST ? ST : na, color = color.new(green, t1), style = plot.style_linebr)
-downTrend = plot(close < ST ? ST : na, color = color.new(red, t1), style = plot.style_linebr, force_overlay = false)
-bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, 'Body Middle', display = display.none)
-
-// SuperTrend Fill Areas
 fill(bodyMiddle, upTrend, (open + close) / 2, ST, color.new(green, t2), color.new(green, t1))
 fill(bodyMiddle, downTrend, ST, (open + close) / 2, color.new(red, t1), color.new(red, t2))
 
-// Webhook Alert Shapes
-plotshape(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', shape.circle, location.belowbar, strong_green, size = size.small)
-plotshape(buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Buy', shape.circle, location.belowbar, green, size = size.tiny)
-plotshape(strong_sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Strong Sell', shape.circle, location.abovebar, strong_red, size = size.small)
-plotshape(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Sell', shape.circle, location.abovebar, red, size = size.tiny)
+plotshape(ta.crossunder(dir, 0) ? ST : na, "Bullish Trend", shape.labelup, location.absolute, green, text = "▲", textcolor = chart.fg_color, size = size.small)
+plotshape(ta.crossover(dir, 0) ? ST : na, "Bearish Trend", shape.labeldown, location.absolute, red, text = "▼", textcolor = chart.fg_color, size = size.small)
 
-// Alert Conditions (must be at global scope)
-alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, 'High Volatility Detected', 'Market entered high volatility state')
-alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, 'Medium Volatility Detected', 'Market entered medium volatility state')
-alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, 'Low Volatility Detected', 'Market entered low volatility state')
+label.new(bar_index, dir > 0 ? ST + ta.atr(7) : ST - ta.atr(7), text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
 
-alertcondition(strong_buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Strong Buy', 'Strong buy signal detected with dynamic JSON payload')
-alertcondition(buy_condition and barstate.isconfirmed and enable_webhooks, '🟢 Webhook: Buy', 'Buy signal detected with dynamic JSON payload')
-alertcondition(strong_sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Strong Sell', 'Strong sell signal detected with dynamic JSON payload')
-alertcondition(sell_condition and barstate.isconfirmed and enable_webhooks, '🔴 Webhook: Sell', 'Sell signal detected with dynamic JSON payload')
+if barstate.islast
+    var data_table = table.new(position=position.top_right, columns=4, rows=4, bgcolor = chart.bg_color, border_width=1, border_color = chart.fg_color, frame_color = chart.fg_color, frame_width = 1)
+    table.cell(data_table, text_halign=text.align_center, column=0, row=0, text="Cluster Number (Volatility Level)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=1, row=0, text="Cluster Centroid (ATR)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=2, row=0, text="Cluster Size (No. of Data Points in Each Cluster)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=3, row=0, text="Current Volatility", text_color = chart.fg_color)
 
-// ============================================================================
-// SCRIPT COMPLETE
-// ============================================================================
-// All operations are executed at global scope for proper Pine Script compatibility
+    table.cell(data_table, text_halign=text.align_center, column=0, row=1, text="3 (High)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=0, row=2, text= "2 (Medium)", text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=0, row=3, text= "1 (Low)", text_color = chart.fg_color)
+
+    table.cell(data_table, text_halign=text.align_center, column=1, row=1, text=str.format("{0,number,#.##}", hv_new), text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=1, row=2, text=str.format("{0,number,#.##}", mv_new), text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=1, row=3, text=str.format("{0,number,#.##}", lv_new), text_color = chart.fg_color)
+
+    table.cell(data_table, text_halign=text.align_center, column=2, row=1, text=str.format("{0,number,#.##}", size_c), text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=2, row=2, text=str.format("{0,number,#.##}", size_b), text_color = chart.fg_color)
+    table.cell(data_table, text_halign=text.align_center, column=2, row=3, text=str.format("{0,number,#.##}", size_a), text_color = chart.fg_color)
+
+    table.cell(data_table, text_halign=text.align_center, column=3, row=1, text="HIGH " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
+    table.cell(data_table, text_halign=text.align_center, column=3, row=2, text="MEDIUM " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
+    table.cell(data_table, text_halign=text.align_center, column=3, row=3, text="LOW " + "(ATR: " + str.format("{0,number,#.##}", volatility) + ")", text_color = chart.bg_color)
+
+    if cluster == 0
+        data_table.cell_set_bgcolor(3, 1, chart.fg_color)
+    else
+        data_table.cell_set_bgcolor(3, 1, chart.bg_color)
+
+    if cluster == 1
+        data_table.cell_set_bgcolor(3, 2, chart.fg_color)
+    else
+        data_table.cell_set_bgcolor(3, 2, chart.bg_color)
+
+    if cluster == 2
+        data_table.cell_set_bgcolor(3, 3, chart.fg_color)
+    else
+        data_table.cell_set_bgcolor(3, 3, chart.bg_color)
+
+////////////////////////////Alerts
+alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "Bullish Trend Shift")
+alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "Bearish Trend Shift")
+alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, "High Volatility")
+alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, "Medium Volatility")
+alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility")
+alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility")
