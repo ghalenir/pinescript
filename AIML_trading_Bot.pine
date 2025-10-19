@@ -1,6 +1,3 @@
-// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
-// © AlgoAlpha
-
 //@version=5
 indicator('AI+ML Trading Bot', 'AI+ML Bot', overlay = true, max_labels_count = 500)
 
@@ -115,8 +112,8 @@ bodyMiddle = plot(barstate.isfirst ? na : (open + close) / 2, "Body Middle",disp
 fill(bodyMiddle, upTrend, (open + close) / 2, ST, color.new(green, t2), color.new(green, t1))
 fill(bodyMiddle, downTrend, ST, (open + close) / 2, color.new(red, t1), color.new(red, t2))
 
-plotshape(ta.crossunder(dir, 0) ? ST : na, "Bullish Trend", shape.labelup, location.absolute, green, text = "▲", textcolor = chart.fg_color, size = size.small)
-plotshape(ta.crossover(dir, 0) ? ST : na, "Bearish Trend", shape.labeldown, location.absolute, red, text = "▼", textcolor = chart.fg_color, size = size.small)
+plotshape(ta.crossunder(dir, 0) ? ST : na, "Buy - Bullish Trend", shape.labelup, location.absolute, green, text = "▲", textcolor = chart.fg_color, size = size.small)
+plotshape(ta.crossover(dir, 0) ? ST : na, "Sell - Bearish Trend", shape.labeldown, location.absolute, red, text = "▼", textcolor = chart.fg_color, size = size.small)
 
 label.new(bar_index, dir > 0 ? ST + ta.atr(7) : ST - ta.atr(7), text = str.tostring(4 - (cluster + 1)), style = label.style_none, textcolor = color.from_gradient(cluster + 1, 1, 3, color.new(dir > 0 ? red : green, 30), color.new(dir > 0 ? red : green, 90)))
 
@@ -159,8 +156,8 @@ if barstate.islast
         data_table.cell_set_bgcolor(3, 3, chart.bg_color)
 
 ////////////////////////////Alerts
-alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "Bullish Trend Shift")
-alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "Bearish Trend Shift")
+alertcondition(ta.crossunder(dir, 0) and barstate.isconfirmed, "Buy - Bullish Trend Shift")
+alertcondition(ta.crossover(dir, 0) and barstate.isconfirmed, "Sell - Bearish Trend Shift")
 alertcondition(cluster == 0 and cluster[1] != 0 and barstate.isconfirmed, "High Volatility")
 alertcondition(cluster == 1 and cluster[1] != 1 and barstate.isconfirmed, "Medium Volatility")
 alertcondition(cluster == 2 and cluster[1] != 2 and barstate.isconfirmed, "Low Volatility")
